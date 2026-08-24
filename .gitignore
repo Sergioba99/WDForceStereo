@@ -1,0 +1,21 @@
+# Build outputs
+*.obj
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.log
+
+# Local build helpers
+kernel32.def
+
+# IDE/editor files
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# OS metadata
+Thumbs.db
+.DS_Store
