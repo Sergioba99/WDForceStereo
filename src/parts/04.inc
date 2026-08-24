@@ -1,3 +1,4 @@
+#ifdef WD_DIAGNOSTIC_6TO2
 LogLine("=== WDForceStereo 1.0 DIAGNOSTIC 6->2 MATRIX ===");
 LogLine("Mode: force game's 6ch mastering to 2ch, log the actual 6->2 matrix, modify matrix NOTHING.");
 #else
