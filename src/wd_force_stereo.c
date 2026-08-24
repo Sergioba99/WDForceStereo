@@ -3,5 +3,3 @@
 #include "parts/02.inc"
 #include "parts/03.inc"
 #include "parts/04.inc"
-#include "parts/05.inc"
-#include "parts/06.inc"
