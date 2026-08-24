@@ -13,3 +13,4 @@ CreateFileW
 WriteFile
 SetFilePointer
 GetPrivateProfileStringW
+GetFileAttributesW
