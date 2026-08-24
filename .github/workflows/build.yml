@@ -18,91 +18,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: One-time source cleanup and INI self-healing
+      - name: One-time finish INI self-healing
         if: github.event_name == 'push'
         shell: pwsh
         run: |
           $path = 'src/wd_force_stereo.c'
           $s = Get-Content $path -Raw
-
-          if ($s -notmatch 'WriteDefaultConfigIfMissing') {
-            $s = $s.Replace('#define OPEN_ALWAYS 4', "#define OPEN_ALWAYS 4`r`n#define CREATE_ALWAYS 2`r`n#define GENERIC_WRITE 0x40000000`r`n#define INVALID_FILE_ATTRIBUTES 0xFFFFFFFF")
-            $s = $s.Replace('__declspec(dllimport) DWORD WINAPI SetFilePointer(HANDLE, LONG, LONG*, DWORD);', "__declspec(dllimport) DWORD WINAPI SetFilePointer(HANDLE, LONG, LONG*, DWORD);`r`n__declspec(dllimport) DWORD WINAPI GetFileAttributesW(LPCWSTR);")
-
-            $needle = 'typedef DWORD (WINAPI *PFN_GetPrivateProfileStringW)(LPCWSTR,LPCWSTR,LPCWSTR,WCHAR*,DWORD,LPCWSTR);'
-            $insert = @'
-          typedef DWORD (WINAPI *PFN_GetPrivateProfileStringW)(LPCWSTR,LPCWSTR,LPCWSTR,WCHAR*,DWORD,LPCWSTR);
-
-          static void WriteDefaultConfigIfMissing(void)
-          {
-              static const CHAR defaultIni[] =
-                  "; WDForceStereo configuration\r\n"
-                  "; This file is recreated automatically if it is missing.\r\n"
-                  "; Edit values, save, and restart Watch Dogs.\r\n"
-                  "\r\n"
-                  "[Audio]\r\n"
-                  "; Front left/right gain\r\n"
-                  "FrontGain=1.000\r\n"
-                  "; Dialogue/front-center gain\r\n"
-                  "CenterGain=1.000\r\n"
-                  "; Rear/surround fold-down gain\r\n"
-                  "SurroundGain=0.000\r\n"
-                  "; Subwoofer/LFE fold-down gain\r\n"
-                  "LFEGain=0.000\r\n"
-                  "; Final global multiplier\r\n"
-                  "MasterGain=1.000\r\n"
-                  "\r\n"
-                  "[Debug]\r\n"
-                  "; 1 = create WDForceStereo.log, 0 = disable logging\r\n"
-                  "Log=1\r\n";
-              HANDLE file;
-              DWORD written = 0;
-
-              if (!g_iniPath[0]) BuildPaths();
-              if (GetFileAttributesW(g_iniPath) != INVALID_FILE_ATTRIBUTES) return;
-
-              file = CreateFileW(g_iniPath, GENERIC_WRITE, FILE_SHARE_READ, NULL,
-                                 CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-              if (file == INVALID_HANDLE_VALUE) {
-                  LogLine("WARNING: WDForceStereo.ini is missing and could not be recreated.");
-                  return;
-              }
-
-              WriteFile(file, defaultIni, (DWORD)(sizeof(defaultIni) - 1), &written, NULL);
-              CloseHandle(file);
-              LogLine("WDForceStereo.ini missing; recreated with default values.");
-          }
-          '@
-            $s = $s.Replace($needle, $insert.Trim())
-            $s = $s.Replace('if(!g_iniPath[0])BuildPaths();`r`n    k=GetModuleHandleW', 'if(!g_iniPath[0])BuildPaths();`r`n    WriteDefaultConfigIfMissing();`r`n    k=GetModuleHandleW')
-            if ($s -notmatch 'WriteDefaultConfigIfMissing\(\);\s*k=GetModuleHandleW') {
-              $s = $s.Replace('if(!g_iniPath[0])BuildPaths();`n    k=GetModuleHandleW', 'if(!g_iniPath[0])BuildPaths();`n    WriteDefaultConfigIfMissing();`n    k=GetModuleHandleW')
-            }
-          }
-
-          $renames = @{
-            'AS(' = 'AppendString('
-            'AC(' = 'AppendChar('
-            'AU(' = 'AppendUInt('
-            'AH(' = 'AppendHex32('
-            'AP(' = 'AppendPointer('
-            'AF3(' = 'AppendFloat3('
-            'EngineInfo(' = 'FindEngineInfo('
-            'VoiceInfo(' = 'FindVoiceInfo('
-            'VtblInfo(' = 'FindVtableHook('
-            'LogSource(' = 'LogSourceVoiceCreation('
-            'DestChannelsFor(' = 'ResolveDestinationChannels('
-          }
-          foreach ($key in $renames.Keys) { $s = $s.Replace($key, $renames[$key]) }
-
-          [IO.File]::WriteAllText((Join-Path $PWD $path), $s, [Text.UTF8Encoding]::new($false))
-          clang-format -i $path
-
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add $path
-          if (-not (git diff --cached --quiet)) {
-            git commit -m 'Refactor source and make INI self-healing'
+          if ($s -notmatch 'WriteDefaultConfigIfMissing\(\);\s*k = GetModuleHandleW') {
+            $pattern = '(?s)(static void LoadConfig\(void\) \{.*?if \(!g_iniPath\[0\]\)\s*BuildPaths\(\);)'
+            $s = [regex]::Replace($s, $pattern, '$1' + "`r`n  WriteDefaultConfigIfMissing();", 1)
+            [IO.File]::WriteAllText((Join-Path $PWD $path), $s, [Text.UTF8Encoding]::new($false))
+            clang-format -i $path
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add $path
+            git commit -m 'Call INI self-healing before loading config'
             git push
           }
 
