@@ -39,6 +39,8 @@ Log=1
 
 The defaults reproduce the known-working dialogue fix. Restart Watch Dogs after editing the INI.
 
+If `WDForceStereo.ini` is missing, the DLL automatically recreates it next to `watch_dogs.exe` using the safe default values above. This means the mod still works if somebody forgets to copy the INI or deletes it accidentally. If the game directory is not writable, the DLL falls back to its compiled defaults and writes a warning to the log when possible.
+
 Useful linear-gain references:
 
 ```text
@@ -79,16 +81,11 @@ R       0    1    1    0    0    0
 
 ```text
 src/
-├── wd_force_stereo.c      # source entry point
-├── exports.def            # dinput8 proxy exports
-└── parts/
-    ├── 01.inc
-    ├── 02.inc
-    ├── 03.inc
-    └── 04.inc
+├── wd_force_stereo.c      # complete implementation
+└── exports.def            # dinput8 proxy exports
 ```
 
-The implementation is split into line-preserving include chunks because of how the source was transferred into the repository; compiling `src/wd_force_stereo.c` produces the complete implementation.
+The source is intentionally kept as one small freestanding C translation unit. It is formatted with `clang-format`, and helper functions use descriptive names so the hook, configuration, logging and matrix-repair logic are easier to follow.
 
 ## Building
 
