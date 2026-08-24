@@ -453,6 +453,7 @@ static void LoadConfig(void) {
   WCHAR b[64];
   if (!g_iniPath[0])
     BuildPaths();
+  WriteDefaultConfigIfMissing();
   k = GetModuleHandleW(L"kernel32.dll");
   gp = k ? (PFN_GetPrivateProfileStringW)GetProcAddress(
                k, "GetPrivateProfileStringW")
