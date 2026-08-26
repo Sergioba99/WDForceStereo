@@ -52,6 +52,10 @@ jobs:
           wd_force_stereo.obj kernel32.lib
           /def:src/exports.def /out:dinput8.dll
 
+      - name: Create NexusTools ASI
+        shell: pwsh
+        run: Copy-Item .\dinput8.dll .\WDForceStereo.asi
+
       - name: Stage release package
         shell: pwsh
         run: |
@@ -59,11 +63,13 @@ jobs:
           $folder = "WDForceStereo-v$version"
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
           Copy-Item .\dinput8.dll "$folder\dinput8.dll"
+          Copy-Item .\WDForceStereo.asi "$folder\WDForceStereo.asi"
           Copy-Item .\release\WDForceStereo.ini "$folder\WDForceStereo.ini"
           Copy-Item .\README.md "$folder\README.md"
           Copy-Item .\LICENSE "$folder\LICENSE"
           Compress-Archive -Path "$folder\*" -DestinationPath "WDForceStereo-v$version.zip" -Force
           Get-FileHash .\dinput8.dll -Algorithm SHA256 | Format-List
+          Get-FileHash .\WDForceStereo.asi -Algorithm SHA256 | Format-List
           Get-FileHash ".\WDForceStereo-v$version.zip" -Algorithm SHA256 | Format-List
 
       - name: Publish GitHub Release
@@ -76,6 +82,7 @@ jobs:
           gh release create $tag `
             ".\WDForceStereo-v$version.zip#WDForceStereo v$version" `
             ".\dinput8.dll#dinput8.dll" `
+            ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
             ".\release\WDForceStereo.ini#WDForceStereo.ini" `
             --repo '${{ github.repository }}' `
             --target '${{ github.sha }}' `
