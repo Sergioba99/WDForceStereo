@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version/tag (for example v1.2)'
+        description: 'Release version/tag (for example v1.0)'
         required: true
         type: string
 
@@ -65,8 +65,7 @@ jobs:
           Copy-Item .\dinput8.dll "$folder\dinput8.dll"
           Copy-Item .\WDForceStereo.asi "$folder\WDForceStereo.asi"
           Copy-Item .\release\WDForceStereo.ini "$folder\WDForceStereo.ini"
-          Copy-Item .\README.md "$folder\README.md"
-          Copy-Item .\LICENSE "$folder\LICENSE"
+          Copy-Item .\release\INSTALL.txt "$folder\INSTALL.txt"
           Compress-Archive -Path "$folder\*" -DestinationPath "WDForceStereo-v$version.zip" -Force
           Get-FileHash .\dinput8.dll -Algorithm SHA256 | Format-List
           Get-FileHash .\WDForceStereo.asi -Algorithm SHA256 | Format-List
@@ -89,6 +88,7 @@ jobs:
               ".\dinput8.dll#dinput8.dll" `
               ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
               ".\release\WDForceStereo.ini#WDForceStereo.ini" `
+              ".\release\INSTALL.txt#Installation instructions" `
               --repo '${{ github.repository }}' `
               --clobber
             exit $LASTEXITCODE
@@ -102,6 +102,7 @@ jobs:
               ".\dinput8.dll#dinput8.dll" `
               ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
               ".\release\WDForceStereo.ini#WDForceStereo.ini" `
+              ".\release\INSTALL.txt#Installation instructions" `
               --repo '${{ github.repository }}' `
               --verify-tag `
               --title "WDForceStereo v$version" `
@@ -115,6 +116,7 @@ jobs:
             ".\dinput8.dll#dinput8.dll" `
             ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
             ".\release\WDForceStereo.ini#WDForceStereo.ini" `
+            ".\release\INSTALL.txt#Installation instructions" `
             --repo '${{ github.repository }}' `
             --target '${{ github.sha }}' `
             --title "WDForceStereo v$version" `
