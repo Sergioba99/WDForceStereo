@@ -33,15 +33,22 @@ jobs:
           wd_force_stereo.obj kernel32.lib
           /def:src/exports.def /out:dinput8.dll
 
+      - name: Create NexusTools ASI
+        shell: pwsh
+        run: Copy-Item .\dinput8.dll .\WDForceStereo.asi
+
       - name: Show SHA256
         shell: pwsh
-        run: Get-FileHash .\dinput8.dll -Algorithm SHA256
+        run: |
+          Get-FileHash .\dinput8.dll -Algorithm SHA256
+          Get-FileHash .\WDForceStereo.asi -Algorithm SHA256
 
       - name: Stage package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item .\dinput8.dll package\dinput8.dll
+          Copy-Item .\WDForceStereo.asi package\WDForceStereo.asi
           Copy-Item .\release\WDForceStereo.ini package\WDForceStereo.ini
           Copy-Item .\README.md package\README.md
           Copy-Item .\LICENSE package\LICENSE
