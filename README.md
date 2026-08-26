@@ -6,15 +6,27 @@ XAudio2 2.7 stereo downmix fix for **Watch Dogs (2014)** on Windows.
 
 On affected stereo setups, Watch Dogs can create a 6-channel XAudio2 mastering path and then generate a 6→2 output matrix that keeps only Front Left and Front Right. The Front Center channel — where dialogue is carried — is effectively discarded, making voices extremely quiet or inaudible.
 
-WDForceStereo is a `dinput8.dll` proxy that hooks the relevant XAudio2 2.7 calls and repairs that stereo downmix. The mix is configurable through `WDForceStereo.ini`.
+WDForceStereo hooks the relevant XAudio2 2.7 calls and repairs that stereo downmix. The mix is configurable through `WDForceStereo.ini`.
 
 ## Installation
 
-Use a compiled `dinput8.dll` together with `release/WDForceStereo.ini`, and copy both files next to `watch_dogs.exe`.
+### Standalone
 
-The repository includes a GitHub Actions workflow that builds the x64 DLL and uploads a ready-to-copy `WDForceStereo-v1.2` artifact. You can also build it locally using the steps in [BUILD.md](BUILD.md).
+Copy `dinput8.dll` and `WDForceStereo.ini` next to `watch_dogs.exe`, then start the game normally.
 
-Then start the game normally.
+### NexusTools / ASI loader
+
+NexusTools already uses its own `dinput8.dll`, so do **not** replace it with WDForceStereo's proxy DLL.
+
+Instead, use `WDForceStereo.asi` together with `WDForceStereo.ini`. Put `WDForceStereo.asi` next to `watch_dogs.exe` so NexusTools' ASI injection helper can load it.
+
+`WDForceStereo.asi` contains the same audio-fix code as the standalone DLL. The XAudio2 hook is initialized from `DllMain` when the module is loaded, so the DirectInput proxy entry points are not required when NexusTools is acting as the loader.
+
+Use **either** `dinput8.dll` (standalone) **or** `WDForceStereo.asi` (with NexusTools), not both.
+
+NexusTools compatibility was first reported by a user who successfully loaded the mod after renaming the DLL to `.asi`. The packaged `.asi` is provided to make that setup explicit and avoid users having to rename files manually.
+
+The repository includes GitHub Actions workflows that build the x64 DLL, create the equivalent `WDForceStereo.asi`, and package both variants. You can also build locally using the steps in [BUILD.md](BUILD.md).
 
 ## Configuration
 
@@ -39,7 +51,7 @@ Log=1
 
 The defaults reproduce the known-working dialogue fix. Restart Watch Dogs after editing the INI.
 
-If `WDForceStereo.ini` is missing, the DLL automatically recreates it next to `watch_dogs.exe` using the safe default values above. This means the mod still works if somebody forgets to copy the INI or deletes it accidentally. If the game directory is not writable, the DLL falls back to its compiled defaults and writes a warning to the log when possible.
+If `WDForceStereo.ini` is missing, the mod automatically recreates it next to `watch_dogs.exe` using the safe default values above. This means the mod still works if somebody forgets to copy the INI or deletes it accidentally. If the game directory is not writable, the mod falls back to its compiled defaults and writes a warning to the log when possible.
 
 Useful linear-gain references:
 
@@ -103,7 +115,9 @@ With `Log=1`, the mod writes `WDForceStereo.log` next to the game executable. It
 
 ## Uninstall
 
-Delete `dinput8.dll`, `WDForceStereo.ini`, and optionally `WDForceStereo.log` from the Watch Dogs executable directory.
+Standalone: delete `dinput8.dll`, `WDForceStereo.ini`, and optionally `WDForceStereo.log` from the Watch Dogs executable directory.
+
+NexusTools: delete `WDForceStereo.asi`, `WDForceStereo.ini`, and optionally `WDForceStereo.log`. Do not remove NexusTools' own `dinput8.dll`.
 
 ## Disclaimer
 
