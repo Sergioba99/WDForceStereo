@@ -50,12 +50,11 @@ jobs:
           Copy-Item .\dinput8.dll package\dinput8.dll
           Copy-Item .\WDForceStereo.asi package\WDForceStereo.asi
           Copy-Item .\release\WDForceStereo.ini package\WDForceStereo.ini
-          Copy-Item .\README.md package\README.md
-          Copy-Item .\LICENSE package\LICENSE
+          Copy-Item .\release\INSTALL.txt package\INSTALL.txt
 
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-v1.2
+          name: WDForceStereo-v1.0
           path: package/
           if-no-files-found: error
