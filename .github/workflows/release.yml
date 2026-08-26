@@ -72,15 +72,46 @@ jobs:
           Get-FileHash .\WDForceStereo.asi -Algorithm SHA256 | Format-List
           Get-FileHash ".\WDForceStereo-v$version.zip" -Algorithm SHA256 | Format-List
 
-      - name: Publish GitHub Release
+      - name: Publish or update GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ steps.version.outputs.tag }}'
           $version = '${{ steps.version.outputs.version }}'
+          $zip = ".\WDForceStereo-v$version.zip"
+
+          gh release view $tag --repo '${{ github.repository }}' *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists; replacing release assets."
+            gh release upload $tag `
+              "$zip#WDForceStereo v$version" `
+              ".\dinput8.dll#dinput8.dll" `
+              ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
+              ".\release\WDForceStereo.ini#WDForceStereo.ini" `
+              --repo '${{ github.repository }}' `
+              --clobber
+            exit $LASTEXITCODE
+          }
+
+          git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Tag $tag already exists; creating release from the existing tag."
+            gh release create $tag `
+              "$zip#WDForceStereo v$version" `
+              ".\dinput8.dll#dinput8.dll" `
+              ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
+              ".\release\WDForceStereo.ini#WDForceStereo.ini" `
+              --repo '${{ github.repository }}' `
+              --verify-tag `
+              --title "WDForceStereo v$version" `
+              --generate-notes
+            exit $LASTEXITCODE
+          }
+
+          Write-Host "Tag $tag does not exist; creating a new release and tag."
           gh release create $tag `
-            ".\WDForceStereo-v$version.zip#WDForceStereo v$version" `
+            "$zip#WDForceStereo v$version" `
             ".\dinput8.dll#dinput8.dll" `
             ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
             ".\release\WDForceStereo.ini#WDForceStereo.ini" `
