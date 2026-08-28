@@ -1,4 +1,4 @@
-WDForceStereo v1.0
+WDForceStereo v1.1
 ==================
 
 Stereo audio fix for Watch Dogs (2014). WDForceStereo repairs an affected XAudio2 stereo downmix that can discard center-channel audio, including dialogue.
