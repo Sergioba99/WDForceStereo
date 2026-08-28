@@ -3,6 +3,6 @@
 
 typedef void *HINSTANCE;
 
-void WDCoreProcessAttach(HINSTANCE module);
+void WDCoreProcessAttach(HINSTANCE module, const char *loaderName);
 
 #endif
