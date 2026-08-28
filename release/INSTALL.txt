@@ -1,23 +1,51 @@
 WDForceStereo v1.0
 ==================
 
-Stereo audio fix for Watch Dogs (2014). WDForceStereo repairs the game's XAudio2 stereo downmix so the missing center-channel audio, including dialogue, is correctly routed to stereo output.
+Stereo audio fix for Watch Dogs (2014). WDForceStereo repairs an affected XAudio2 stereo downmix that can discard center-channel audio, including dialogue.
+
+Choose ONE installation method below. Do not install multiple WDForceStereo loaders at the same time.
 
 INSTALLATION
 ------------
 
-Standalone:
-1. Copy dinput8.dll and WDForceStereo.ini to the folder containing Watch_Dogs.exe.
-2. Start the game normally.
+1) Standalone - DInput8 proxy
 
-NexusTools / ASI loader:
-1. Keep NexusTools' own dinput8.dll in place.
-2. Copy WDForceStereo.asi and WDForceStereo.ini to the folder containing Watch_Dogs.exe.
-3. Start the game normally. NexusTools loads WDForceStereo through its ASI Injection Helper.
+Use this when NexusTools or another dinput8.dll loader is not installed.
 
-WDForceStereo may not appear in NexusTools' Installed Mods list. This is expected because the mod is loaded as an ASI plugin rather than through NexusTools' modconfig system.
+Copy next to watch_dogs.exe:
+- dinput8.dll
+- WDForceStereo.ini
 
-Do not use WDForceStereo's dinput8.dll and WDForceStereo.asi at the same time.
+Start the game normally.
+
+2) NexusTools - WinMM proxy
+
+Keep NexusTools' own dinput8.dll in place.
+
+Copy next to watch_dogs.exe:
+- winmm.dll
+- WDForceStereo.ini
+
+Start the game normally.
+
+3) NexusTools - ASI plugin
+
+Keep NexusTools' own dinput8.dll in place.
+
+Copy next to watch_dogs.exe:
+- WDForceStereo.asi
+- WDForceStereo.ini
+
+Start the game normally. NexusTools loads WDForceStereo through its ASI Injection Helper.
+
+WDForceStereo.asi may not appear in NexusTools' Installed Mods list. This is expected because it is loaded as an ASI plugin rather than through the NexusTools modconfig system.
+
+IMPORTANT
+---------
+
+- Install only ONE of dinput8.dll, winmm.dll, or WDForceStereo.asi from WDForceStereo.
+- Do not replace NexusTools' own dinput8.dll with WDForceStereo's dinput8.dll.
+- All three WDForceStereo loaders use the same audio-fix core.
 
 CONFIGURATION
 -------------
@@ -26,11 +54,21 @@ Audio gains can be adjusted in WDForceStereo.ini. Changes are read when the game
 
 If WDForceStereo.ini is missing, the mod recreates it automatically with the default values when possible.
 
+SUPPORT / LOGGING
+-----------------
+
+With Log=1, each launch creates a fresh WDForceStereo.log next to watch_dogs.exe. The log identifies the WDForceStereo version, build commit, loader method, XAudio2 hook status and downmix result.
+
+If the fix does not work, include WDForceStereo.log when reporting the problem.
+
 UNINSTALL
 ---------
 
-Standalone:
-Delete dinput8.dll, WDForceStereo.ini and, if present, WDForceStereo.log.
+Delete the WDForceStereo loader you installed:
+- dinput8.dll, OR
+- winmm.dll, OR
+- WDForceStereo.asi
 
-NexusTools:
-Delete WDForceStereo.asi, WDForceStereo.ini and, if present, WDForceStereo.log. Do not delete NexusTools' own dinput8.dll.
+Also delete WDForceStereo.ini and, if present, WDForceStereo.log.
+
+If using NexusTools, do not delete NexusTools' own dinput8.dll.
