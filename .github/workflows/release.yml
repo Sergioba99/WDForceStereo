@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version/tag (for example v1.0)'
+        description: 'Release version/tag (for example v1.1)'
         required: true
         type: string
 
@@ -38,13 +38,15 @@ jobs:
         shell: pwsh
         run: |
           $id = (git rev-parse --short HEAD).Trim()
+          $version = '${{ steps.version.outputs.version }}'
           @"
           #ifndef WD_FORCE_STEREO_BUILD_H
           #define WD_FORCE_STEREO_BUILD_H
+          #define WD_VERSION "$version"
           #define WD_BUILD_ID "$id"
           #endif
           "@ | Out-File -Encoding ascii src\wd_build.h
-          Write-Host "WDForceStereo build: $id"
+          Write-Host "WDForceStereo v$version build: $id"
 
       - name: Build kernel32 import library
         shell: pwsh
