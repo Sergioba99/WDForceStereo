@@ -1,27 +1,36 @@
-// Experimental WinMM proxy for WDForceStereo.
+// Experimental WinMM loader/proxy layer for WDForceStereo.
+// Shared audio/XAudio2 logic lives in wd_core.c.
 //
-// This file intentionally contains only the WinMM-facing forwarding layer.
-// The existing WDForceStereo core/DllMain remains in wd_force_stereo.c.
-//
-// Watch Dogs' Disrupt_b64.dll imports timeGetTime from WINMM.dll, so this
-// minimal test proxy forwards that call to the real System32\winmm.dll while
-// allowing WDForceStereo's existing DllMain to be loaded early.
+// Watch Dogs' Disrupt_b64.dll imports timeGetTime from WINMM.dll. This test
+// proxy forwards that function to the real System32\winmm.dll and starts the
+// shared WDForceStereo core from DllMain.
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef unsigned int UINT;
 typedef unsigned long DWORD;
+typedef int BOOL;
 typedef unsigned short WCHAR;
 typedef const WCHAR *LPCWSTR;
 typedef const char *LPCSTR;
 typedef void *HMODULE;
+typedef void *HINSTANCE;
 typedef void *FARPROC;
+typedef void *LPVOID;
 
 #define WINAPI __stdcall
+#define TRUE 1
 #define NULL 0
+#define DLL_PROCESS_ATTACH 1
 #define MAX_PATH 260
 
 __declspec(dllimport) UINT WINAPI GetSystemDirectoryW(WCHAR *, UINT);
 __declspec(dllimport) HMODULE WINAPI LoadLibraryW(LPCWSTR);
 __declspec(dllimport) FARPROC WINAPI GetProcAddress(HMODULE, LPCSTR);
+
+void WDCoreProcessAttach(HINSTANCE module);
 
 typedef DWORD(WINAPI *PFN_timeGetTime)(void);
 
@@ -62,3 +71,14 @@ __declspec(dllexport) DWORD WINAPI timeGetTime(void) {
   f = (PFN_timeGetTime)GetProcAddress(m, "timeGetTime");
   return f ? f() : 0;
 }
+
+BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID x) {
+  (void)x;
+  if (r == DLL_PROCESS_ATTACH)
+    WDCoreProcessAttach(h);
+  return TRUE;
+}
+
+#ifdef __cplusplus
+}
+#endif
