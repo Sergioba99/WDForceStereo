@@ -34,27 +34,42 @@ jobs:
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "version=$($tag.TrimStart('v'))" >> $env:GITHUB_OUTPUT
 
+      - name: Stamp build identity
+        shell: pwsh
+        run: |
+          $id = (git rev-parse --short HEAD).Trim()
+          @"
+          #ifndef WD_FORCE_STEREO_BUILD_H
+          #define WD_FORCE_STEREO_BUILD_H
+          #define WD_BUILD_ID "$id"
+          #endif
+          "@ | Out-File -Encoding ascii src\wd_build.h
+          Write-Host "WDForceStereo build: $id"
+
       - name: Build kernel32 import library
         shell: pwsh
         run: lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
 
-      - name: Compile
+      - name: Compile shared core
         shell: pwsh
         run: >-
-          clang --target=x86_64-pc-windows-msvc -c src/wd_force_stereo.c
-          -o wd_force_stereo.obj -O2 -ffreestanding -fno-builtin
+          clang --target=x86_64-pc-windows-msvc -c src/wd_core.c
+          -o wd_core.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Link
+      - name: Compile loader layers
         shell: pwsh
-        run: >-
-          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib
-          wd_force_stereo.obj kernel32.lib
-          /def:src/exports.def /out:dinput8.dll
+        run: |
+          clang --target=x86_64-pc-windows-msvc -c src/dinput8_proxy.c -o dinput8_proxy.obj -O2 -ffreestanding -fno-builtin -fno-stack-protector -Wno-incompatible-library-redeclaration
+          clang --target=x86_64-pc-windows-msvc -c src/winmm_proxy.c -o winmm_proxy.obj -O2 -ffreestanding -fno-builtin -fno-stack-protector -Wno-incompatible-library-redeclaration
+          clang --target=x86_64-pc-windows-msvc -c src/asi_entry.c -o asi_entry.obj -O2 -ffreestanding -fno-builtin -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Create NexusTools ASI
+      - name: Link release binaries
         shell: pwsh
-        run: Copy-Item .\dinput8.dll .\WDForceStereo.asi
+        run: |
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj dinput8_proxy.obj kernel32.lib /def:src/dinput8_exports.def /out:dinput8.dll
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj winmm_proxy.obj kernel32.lib /def:src/winmm_exports.def /out:winmm.dll
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj asi_entry.obj kernel32.lib /out:WDForceStereo.asi
 
       - name: Stage release package
         shell: pwsh
@@ -63,11 +78,15 @@ jobs:
           $folder = "WDForceStereo-v$version"
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
           Copy-Item .\dinput8.dll "$folder\dinput8.dll"
+          Copy-Item .\winmm.dll "$folder\winmm.dll"
           Copy-Item .\WDForceStereo.asi "$folder\WDForceStereo.asi"
           Copy-Item .\release\WDForceStereo.ini "$folder\WDForceStereo.ini"
           Copy-Item .\release\INSTALL.txt "$folder\INSTALL.txt"
+          git rev-parse --short HEAD | Out-File -Encoding ascii "$folder\BUILD_COMMIT.txt"
           Compress-Archive -Path "$folder\*" -DestinationPath "WDForceStereo-v$version.zip" -Force
+
           Get-FileHash .\dinput8.dll -Algorithm SHA256 | Format-List
+          Get-FileHash .\winmm.dll -Algorithm SHA256 | Format-List
           Get-FileHash .\WDForceStereo.asi -Algorithm SHA256 | Format-List
           Get-FileHash ".\WDForceStereo-v$version.zip" -Algorithm SHA256 | Format-List
 
@@ -80,44 +99,28 @@ jobs:
           $version = '${{ steps.version.outputs.version }}'
           $zip = ".\WDForceStereo-v$version.zip"
 
+          $assets = @(
+            "$zip#WDForceStereo v$version",
+            ".\dinput8.dll#dinput8.dll (standalone)",
+            ".\winmm.dll#winmm.dll (proxy / NexusTools option)",
+            ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools ASI option)",
+            ".\release\WDForceStereo.ini#WDForceStereo.ini",
+            ".\release\INSTALL.txt#Installation instructions"
+          )
+
           gh release view $tag --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Release $tag already exists; replacing release assets."
-            gh release upload $tag `
-              "$zip#WDForceStereo v$version" `
-              ".\dinput8.dll#dinput8.dll" `
-              ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
-              ".\release\WDForceStereo.ini#WDForceStereo.ini" `
-              ".\release\INSTALL.txt#Installation instructions" `
-              --repo '${{ github.repository }}' `
-              --clobber
+            gh release upload $tag @assets --repo '${{ github.repository }}' --clobber
             exit $LASTEXITCODE
           }
 
           git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Tag $tag already exists; creating release from the existing tag."
-            gh release create $tag `
-              "$zip#WDForceStereo v$version" `
-              ".\dinput8.dll#dinput8.dll" `
-              ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
-              ".\release\WDForceStereo.ini#WDForceStereo.ini" `
-              ".\release\INSTALL.txt#Installation instructions" `
-              --repo '${{ github.repository }}' `
-              --verify-tag `
-              --title "WDForceStereo v$version" `
-              --generate-notes
+            gh release create $tag @assets --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes
             exit $LASTEXITCODE
           }
 
           Write-Host "Tag $tag does not exist; creating a new release and tag."
-          gh release create $tag `
-            "$zip#WDForceStereo v$version" `
-            ".\dinput8.dll#dinput8.dll" `
-            ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools)" `
-            ".\release\WDForceStereo.ini#WDForceStereo.ini" `
-            ".\release\INSTALL.txt#Installation instructions" `
-            --repo '${{ github.repository }}' `
-            --target '${{ github.sha }}' `
-            --title "WDForceStereo v$version" `
-            --generate-notes
+          gh release create $tag @assets --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes
