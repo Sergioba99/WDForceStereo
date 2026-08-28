@@ -29,56 +29,28 @@ jobs:
         shell: pwsh
         run: lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
 
-      - name: Compile optimized WDForceStereo core
+      - name: Compile shared core
         shell: pwsh
         run: >-
           clang --target=x86_64-pc-windows-msvc -c src/wd_core.c
           -o wd_core.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Compile DInput8 proxy layer
+      - name: Compile loader layers
         shell: pwsh
-        run: >-
-          clang --target=x86_64-pc-windows-msvc -c src/dinput8_proxy.c
-          -o dinput8_proxy.obj -O2 -ffreestanding -fno-builtin
-          -fno-stack-protector -Wno-incompatible-library-redeclaration
+        run: |
+          clang --target=x86_64-pc-windows-msvc -c src/dinput8_proxy.c -o dinput8_proxy.obj -O2 -ffreestanding -fno-builtin -fno-stack-protector -Wno-incompatible-library-redeclaration
+          clang --target=x86_64-pc-windows-msvc -c src/winmm_proxy.c -o winmm_proxy.obj -O2 -ffreestanding -fno-builtin -fno-stack-protector -Wno-incompatible-library-redeclaration
+          clang --target=x86_64-pc-windows-msvc -c src/asi_entry.c -o asi_entry.obj -O2 -ffreestanding -fno-builtin -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Compile complete WinMM proxy layer
+      - name: Link loader variants
         shell: pwsh
-        run: >-
-          clang --target=x86_64-pc-windows-msvc -c src/winmm_proxy.c
-          -o winmm_proxy.obj -O2 -ffreestanding -fno-builtin
-          -fno-stack-protector -Wno-incompatible-library-redeclaration
+        run: |
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj dinput8_proxy.obj kernel32.lib /def:src/dinput8_exports.def /out:dinput8.dll
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj winmm_proxy.obj kernel32.lib /def:src/winmm_exports.def /out:winmm.dll
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj asi_entry.obj kernel32.lib /out:WDForceStereo.asi
 
-      - name: Compile dedicated ASI entry
-        shell: pwsh
-        run: >-
-          clang --target=x86_64-pc-windows-msvc -c src/asi_entry.c
-          -o asi_entry.obj -O2 -ffreestanding -fno-builtin
-          -fno-stack-protector -Wno-incompatible-library-redeclaration
-
-      - name: Link DInput8 proxy
-        shell: pwsh
-        run: >-
-          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
-          wd_core.obj dinput8_proxy.obj kernel32.lib
-          /def:src/exports.def /out:dinput8.dll
-
-      - name: Link WinMM proxy
-        shell: pwsh
-        run: >-
-          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
-          wd_core.obj winmm_proxy.obj kernel32.lib
-          /def:src/winmm_exports.def /out:winmm.dll
-
-      - name: Link ASI plugin
-        shell: pwsh
-        run: >-
-          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
-          wd_core.obj asi_entry.obj kernel32.lib
-          /out:WDForceStereo.asi
-
-      - name: Stage support-log regression artifact
+      - name: Stage final regression artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-package | Out-Null
@@ -86,27 +58,8 @@ jobs:
           Copy-Item .\winmm.dll test-package\winmm.dll
           Copy-Item .\WDForceStereo.asi test-package\WDForceStereo.asi
           Copy-Item .\release\WDForceStereo.ini test-package\WDForceStereo.ini
+          Copy-Item .\release\INSTALL.txt test-package\INSTALL.txt
           git rev-parse --short HEAD | Out-File -Encoding ascii test-package\BUILD_COMMIT.txt
-          @"
-          TEST PURPOSE: optimized core + support-oriented logging regression test.
-
-          The log is now reset for every launch and identifies:
-          - WDForceStereo version
-          - exact build commit
-          - loader route (DInput8 / WinMM / ASI)
-          - loaded gains
-          - XAudio2 hook result
-          - forced-stereo mastering voice
-          - original and final 6->2 matrices
-          - configured downmix result
-
-          Test each route separately:
-          - dinput8.dll standalone
-          - winmm.dll with NexusTools' dinput8.dll
-          - WDForceStereo.asi with NexusTools
-
-          Do not install more than one WDForceStereo loader at the same time.
-          "@ | Out-File -Encoding ascii test-package\TEST_README.txt
 
       - name: Show SHA256
         shell: pwsh
@@ -118,7 +71,7 @@ jobs:
       - name: Upload temporary test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-support-log-test
+          name: WDForceStereo-final-regression-test
           path: test-package/
           if-no-files-found: error
           retention-days: 7
