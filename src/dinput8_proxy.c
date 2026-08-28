@@ -1,5 +1,5 @@
 // DInput8 loader/proxy layer for WDForceStereo.
-// Audio/XAudio2 logic lives behind WDCoreAttachEntry in wd_core_wrap.c.
+// Shared audio/XAudio2 logic lives in wd_core.c.
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,7 +9,6 @@ typedef unsigned char BYTE;
 typedef unsigned short WORD;
 typedef unsigned int UINT;
 typedef unsigned long DWORD;
-typedef unsigned long ULONG;
 typedef long HRESULT;
 typedef int BOOL;
 typedef void *HMODULE;
@@ -24,6 +23,7 @@ typedef void *LPUNKNOWN;
 #define TRUE 1
 #define FALSE 0
 #define NULL 0
+#define DLL_PROCESS_ATTACH 1
 #define MAX_PATH 260
 #define E_FAIL ((HRESULT)0x80004005L)
 
@@ -44,7 +44,7 @@ __declspec(dllimport) UINT WINAPI GetSystemDirectoryW(unsigned short *, UINT);
 __declspec(dllimport) HMODULE WINAPI LoadLibraryW(LPCWSTR);
 __declspec(dllimport) FARPROC WINAPI GetProcAddress(HMODULE, LPCSTR);
 
-BOOL WINAPI WDCoreAttachEntry(HINSTANCE, DWORD, LPVOID);
+void WDCoreProcessAttach(HINSTANCE module);
 
 static HMODULE g_realDinput8 = NULL;
 
@@ -124,7 +124,10 @@ __declspec(dllexport) HRESULT WINAPI DllUnregisterServer(void) {
 }
 
 BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID x) {
-  return WDCoreAttachEntry(h, r, x);
+  (void)x;
+  if (r == DLL_PROCESS_ATTACH)
+    WDCoreProcessAttach(h);
+  return TRUE;
 }
 
 #ifdef __cplusplus
