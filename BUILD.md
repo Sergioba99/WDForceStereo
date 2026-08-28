@@ -1,17 +1,19 @@
 # Building WDForceStereo
 
-WDForceStereo v1.2 is a 64-bit Windows DLL proxy for `dinput8.dll`. The tested build was produced with Clang targeting MSVC ABI and `lld-link`, without the CRT.
+WDForceStereo v1.0 is a 64-bit Windows XAudio2 stereo downmix fix for Watch Dogs (2014). The standalone build is a `dinput8.dll` proxy. The NexusTools build uses the same binary renamed to `WDForceStereo.asi`, because NexusTools loads it through its ASI Injection Helper.
+
+The tested build uses Clang targeting the MSVC ABI and `lld-link`, without the CRT.
 
 ## Requirements
 
 - `clang` with the `x86_64-pc-windows-msvc` target
 - `lld-link`
 
-No Visual Studio project is required.
+No Visual Studio project or legacy DirectX SDK is required.
 
-## 1. Create a minimal kernel32 import library
+## 1. Build the minimal kernel32 import library
 
-Create `kernel32.def`:
+The repository already contains `kernel32.def` with the imports required by WDForceStereo:
 
 ```def
 LIBRARY KERNEL32.dll
@@ -29,9 +31,10 @@ CreateFileW
 WriteFile
 SetFilePointer
 GetPrivateProfileStringW
+GetFileAttributesW
 ```
 
-Generate the import library:
+Generate the import library from the repository root:
 
 ```bat
 lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
@@ -39,17 +42,15 @@ lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
 
 ## 2. Compile
 
-From the repository root:
-
 ```bat
 clang --target=x86_64-pc-windows-msvc -c src\wd_force_stereo.c ^
   -o wd_force_stereo.obj -O2 -ffreestanding -fno-builtin ^
   -fno-stack-protector -Wno-incompatible-library-redeclaration
 ```
 
-`src/wd_force_stereo.c` includes the line-preserving implementation chunks from `src/parts/`.
+`src/wd_force_stereo.c` is the complete implementation.
 
-## 3. Link
+## 3. Link the standalone DLL
 
 ```bat
 lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib ^
@@ -58,9 +59,27 @@ lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib ^
   /out:dinput8.dll
 ```
 
+## 4. Create the NexusTools ASI build
+
+No separate compilation is required. `WDForceStereo.asi` is byte-for-byte the same PE DLL as `dinput8.dll`; only the filename/extension is different so NexusTools' ASI Injection Helper can load it.
+
+Using Command Prompt:
+
+```bat
+copy /Y dinput8.dll WDForceStereo.asi
+```
+
+Using PowerShell:
+
+```powershell
+Copy-Item .\dinput8.dll .\WDForceStereo.asi -Force
+```
+
+The GitHub Actions workflows use this same method.
+
 ## Expected exports
 
-The resulting proxy must export:
+The resulting binary exports:
 
 ```text
 DirectInput8Create
@@ -70,12 +89,42 @@ DllRegisterServer
 DllUnregisterServer
 ```
 
-## Installation test
+These exports are required when the binary is used as the standalone `dinput8.dll` proxy. They are harmless when the same binary is loaded as `WDForceStereo.asi` by NexusTools.
 
-Copy the generated `dinput8.dll` and `release/WDForceStereo.ini` next to `watch_dogs.exe`.
+## Installation tests
 
-With logging enabled, `WDForceStereo.log` should contain entries showing a requested 6-channel XAudio2 mastering voice being passed as 2 channels and a configured 6→2 matrix.
+### Standalone
+
+Copy these files next to `watch_dogs.exe`:
+
+```text
+dinput8.dll
+WDForceStereo.ini
+```
+
+Start the game normally.
+
+### NexusTools
+
+Keep NexusTools' own `dinput8.dll` in place and copy these files next to `watch_dogs.exe`:
+
+```text
+WDForceStereo.asi
+WDForceStereo.ini
+```
+
+Do not install WDForceStereo's `dinput8.dll` at the same time when using NexusTools.
+
+WDForceStereo is loaded by NexusTools' ASI Injection Helper and therefore does not need to appear in NexusTools' Installed Mods list.
+
+Both standalone and NexusTools/ASI loading have been tested in-game.
+
+## Verification
+
+With logging enabled (`Log=1` in `WDForceStereo.ini`), `WDForceStereo.log` should be created next to the game executable. It should contain entries showing the requested 6-channel XAudio2 mastering voice being passed as 2 channels and the configured 6-to-2 matrix.
 
 ## Notes
 
-This project intentionally resolves COM/XAudio2 functions dynamically and forwards DInput8 to the Windows system DLL. It does not require the legacy DirectX SDK headers to compile because the small subset of XAudio2 2.7 ABI structures and interfaces used by the hook is declared locally.
+WDForceStereo resolves COM/XAudio2 functions dynamically and, in standalone mode, forwards DInput8 calls to the Windows system DLL. It does not require the legacy DirectX SDK headers because the small subset of the XAudio2 2.7 ABI used by the hook is declared locally in the source.
+
+For a reproducible reference build, see `.github/workflows/build.yml` and `.github/workflows/release.yml`, which contain the exact commands used by GitHub Actions to build the release binaries.
