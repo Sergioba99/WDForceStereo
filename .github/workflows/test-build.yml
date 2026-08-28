@@ -13,6 +13,18 @@ jobs:
         with:
           ref: dev
 
+      - name: Stamp build identity
+        shell: pwsh
+        run: |
+          $id = (git rev-parse --short HEAD).Trim()
+          @"
+          #ifndef WD_FORCE_STEREO_BUILD_H
+          #define WD_FORCE_STEREO_BUILD_H
+          #define WD_BUILD_ID "$id"
+          #endif
+          "@ | Out-File -Encoding ascii src\wd_build.h
+          Write-Host "WDForceStereo build: $id"
+
       - name: Build kernel32 import library
         shell: pwsh
         run: lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
@@ -66,7 +78,7 @@ jobs:
           wd_core.obj asi_entry.obj kernel32.lib
           /out:WDForceStereo.asi
 
-      - name: Stage optimized-core regression artifact
+      - name: Stage support-log regression artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-package | Out-Null
@@ -76,13 +88,17 @@ jobs:
           Copy-Item .\release\WDForceStereo.ini test-package\WDForceStereo.ini
           git rev-parse --short HEAD | Out-File -Encoding ascii test-package\BUILD_COMMIT.txt
           @"
-          TEST PURPOSE: optimized shared-core regression test.
+          TEST PURPOSE: optimized core + support-oriented logging regression test.
 
-          The audio behavior and INI semantics are intended to remain unchanged.
-          This build removes obsolete diagnostic state, redundant source-voice
-          hooks/state, duplicated path storage, redundant log file operations,
-          and unnecessary dynamic kernel32 lookup while keeping all three loader
-          routes independent.
+          The log is now reset for every launch and identifies:
+          - WDForceStereo version
+          - exact build commit
+          - loader route (DInput8 / WinMM / ASI)
+          - loaded gains
+          - XAudio2 hook result
+          - forced-stereo mastering voice
+          - original and final 6->2 matrices
+          - configured downmix result
 
           Test each route separately:
           - dinput8.dll standalone
@@ -102,7 +118,7 @@ jobs:
       - name: Upload temporary test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-optimized-core-test
+          name: WDForceStereo-support-log-test
           path: test-package/
           if-no-files-found: error
           retention-days: 7
