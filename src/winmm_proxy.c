@@ -93,7 +93,7 @@ BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID x) {
   (void)x;
   if (r == DLL_PROCESS_ATTACH) {
     InitWinmmForwarders();
-    WDCoreProcessAttach(h);
+    WDCoreProcessAttach(h, "WinMM");
   }
   return TRUE;
 }
