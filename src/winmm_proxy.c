@@ -1,9 +1,10 @@
-// Experimental WinMM loader/proxy layer for WDForceStereo.
+// WinMM loader/proxy layer for WDForceStereo (x64).
 // Shared audio/XAudio2 logic lives in wd_core.c.
 //
-// Watch Dogs' Disrupt_b64.dll imports timeGetTime from WINMM.dll. This test
-// proxy forwards that function to the real System32\winmm.dll and starts the
-// shared WDForceStereo core from DllMain.
+// All WinMM exports are forwarded to the real System32\winmm.dll. The proxy
+// stubs deliberately have no typed parameters: on Win64 the calling convention
+// is uniform and the optimized stub becomes a direct tail jump, preserving the
+// caller's integer, floating-point and stack arguments.
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,6 +12,7 @@ extern "C" {
 
 typedef unsigned int UINT;
 typedef unsigned long DWORD;
+typedef unsigned long long ULONG_PTR;
 typedef int BOOL;
 typedef unsigned short WCHAR;
 typedef const WCHAR *LPCWSTR;
@@ -32,11 +34,19 @@ __declspec(dllimport) FARPROC WINAPI GetProcAddress(HMODULE, LPCSTR);
 
 void WDCoreProcessAttach(HINSTANCE module);
 
-typedef DWORD(WINAPI *PFN_timeGetTime)(void);
+typedef ULONG_PTR(WINAPI *PFN_GENERIC_WINMM)(void);
 
 static HMODULE g_realWinmm = NULL;
 
-static HMODULE EnsureRealWinmm(void) {
+#define X(name) static FARPROC g_##name = NULL;
+#include "winmm_exports.inc"
+#undef X
+
+static ULONG_PTR WINAPI MissingWinmmExport(void) {
+  return 0;
+}
+
+static HMODULE LoadRealWinmm(void) {
   WCHAR path[MAX_PATH];
   UINT n, i;
   static const WCHAR name[] = L"winmm.dll";
@@ -61,21 +71,31 @@ static HMODULE EnsureRealWinmm(void) {
   return g_realWinmm;
 }
 
-__declspec(dllexport) DWORD WINAPI timeGetTime(void) {
-  HMODULE m = EnsureRealWinmm();
-  PFN_timeGetTime f;
+static void InitWinmmForwarders(void) {
+  HMODULE m = LoadRealWinmm();
 
-  if (!m)
-    return 0;
-
-  f = (PFN_timeGetTime)GetProcAddress(m, "timeGetTime");
-  return f ? f() : 0;
+#define X(name)                                                               \
+  do {                                                                        \
+    FARPROC p = m ? GetProcAddress(m, #name) : NULL;                          \
+    g_##name = p ? p : (FARPROC)&MissingWinmmExport;                          \
+  } while (0);
+#include "winmm_exports.inc"
+#undef X
 }
+
+#define X(name)                                                               \
+  __declspec(noinline) ULONG_PTR WINAPI Proxy_##name(void) {                  \
+    return ((PFN_GENERIC_WINMM)g_##name)();                                   \
+  }
+#include "winmm_exports.inc"
+#undef X
 
 BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID x) {
   (void)x;
-  if (r == DLL_PROCESS_ATTACH)
+  if (r == DLL_PROCESS_ATTACH) {
+    InitWinmmForwarders();
     WDCoreProcessAttach(h);
+  }
   return TRUE;
 }
 
