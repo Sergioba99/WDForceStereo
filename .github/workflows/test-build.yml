@@ -38,6 +38,13 @@ jobs:
           -o winmm_proxy.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
+      - name: Compile dedicated ASI entry
+        shell: pwsh
+        run: >-
+          clang --target=x86_64-pc-windows-msvc -c src/asi_entry.c
+          -o asi_entry.obj -O2 -ffreestanding -fno-builtin
+          -fno-stack-protector -Wno-incompatible-library-redeclaration
+
       - name: Link complete DInput8 proxy
         shell: pwsh
         run: >-
@@ -52,41 +59,42 @@ jobs:
           wd_core.obj winmm_proxy.obj kernel32.lib
           /def:src/winmm_exports.def /out:winmm.dll
 
-      - name: Stage proxy test artifact
+      - name: Link dedicated ASI plugin
+        shell: pwsh
+        run: >-
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
+          wd_core.obj asi_entry.obj kernel32.lib
+          /out:WDForceStereo.asi
+
+      - name: Stage three-route test artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-package | Out-Null
           Copy-Item .\dinput8.dll test-package\dinput8.dll
           Copy-Item .\winmm.dll test-package\winmm.dll
+          Copy-Item .\WDForceStereo.asi test-package\WDForceStereo.asi
           Copy-Item .\release\WDForceStereo.ini test-package\WDForceStereo.ini
           git rev-parse --short HEAD | Out-File -Encoding ascii test-package\BUILD_COMMIT.txt
           @"
-          TEST PURPOSE: complete proxy forwarding regression test.
+          TEST PURPOSE: three independent WDForceStereo loader routes.
 
           dinput8.dll:
-          - Shared validated WDForceStereo core.
-          - Complete DInput8 x64 export surface (5 exports).
-          - Each DInput8 call is forwarded to the real System32 dinput8.dll.
+          - Standalone proxy route.
+          - Shared WDForceStereo core.
+          - Complete DInput8 x64 export surface.
 
           winmm.dll:
-          - Same shared WDForceStereo core.
-          - Complete 192-entry WinMM x64 export surface used by mature proxy loaders.
-          - Each WinMM call is forwarded to the real System32 winmm.dll.
+          - Early-load proxy route compatible with NexusTools' own dinput8.dll.
+          - Shared WDForceStereo core.
+          - Complete WinMM x64 export surface.
 
-          Test DInput8:
-          - Close the game/NexusTools.
-          - Temporarily rename NexusTools' dinput8.dll (for example dinput8.dll.nexustools).
-          - Install this dinput8.dll + WDForceStereo.ini.
-          - Do NOT install winmm.dll for this test.
+          WDForceStereo.asi:
+          - Dedicated native ASI plugin; no copied/renamed DInput8 binary.
+          - Shared WDForceStereo core.
+          - Intended for NexusTools ASI Injection Helper testing.
 
-          Test WinMM with NexusTools:
-          - Restore NexusTools' own dinput8.dll.
-          - Remove WDForceStereo's dinput8.dll.
-          - Install this winmm.dll + WDForceStereo.ini.
-          - Do NOT install WDForceStereo.asi for this test.
-
-          Test the two proxy routes separately. Do not install WDForceStereo dinput8.dll
-          and winmm.dll simultaneously yet because both currently start the shared core.
+          Test each route separately. Do not install more than one WDForceStereo
+          loader at the same time for this build.
           "@ | Out-File -Encoding ascii test-package\TEST_README.txt
 
       - name: Show SHA256
@@ -94,11 +102,12 @@ jobs:
         run: |
           Get-FileHash .\dinput8.dll -Algorithm SHA256
           Get-FileHash .\winmm.dll -Algorithm SHA256
+          Get-FileHash .\WDForceStereo.asi -Algorithm SHA256
 
       - name: Upload temporary test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-complete-proxy-test
+          name: WDForceStereo-three-loader-test
           path: test-package/
           if-no-files-found: error
           retention-days: 7
