@@ -139,7 +139,9 @@ See [BUILD.md](BUILD.md). GitHub Actions uses the same Clang/LLD commands docume
 
 ## Current version
 
-Current public version: **v1.0**.
+Current public version: **v1.1**.
+
+v1.1 introduces the shared-core / multi-loader architecture, adds dedicated WinMM and ASI variants, improves support logging and build identification, and removes the obsolete monolithic implementation used during development.
 
 The DInput8, WinMM and ASI loader routes have been tested in-game. The original low-dialogue case was also A/B tested against the unmodified game after the shared-core refactor.
 
@@ -161,7 +163,7 @@ If reporting a problem, attach `WDForceStereo.log` and state which installation 
 
 The release binaries are built from this repository by GitHub Actions. The exact build commands are public in `.github/workflows/build.yml` and `.github/workflows/release.yml`, and [BUILD.md](BUILD.md) documents how to compile the same sources locally.
 
-Release workflows also print SHA-256 hashes for the generated binaries and package. The runtime log includes the source commit embedded by CI, making it possible to identify which source revision produced a reported build.
+Release workflows print SHA-256 hashes for the generated binaries and package. The runtime log includes the source commit embedded by CI, making it possible to identify which source revision produced a reported build.
 
 ## Uninstall
 
