@@ -124,7 +124,7 @@ __declspec(dllexport) HRESULT WINAPI DllUnregisterServer(void) {
 BOOL WINAPI DllMain(HINSTANCE h, DWORD r, LPVOID x) {
   (void)x;
   if (r == DLL_PROCESS_ATTACH)
-    WDCoreProcessAttach(h);
+    WDCoreProcessAttach(h, "DInput8");
   return TRUE;
 }
 
