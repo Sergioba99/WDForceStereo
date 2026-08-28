@@ -1,6 +1,6 @@
 # Building WDForceStereo
 
-WDForceStereo v1.0 is a 64-bit Windows XAudio2 2.7 stereo downmix fix for Watch Dogs (2014).
+WDForceStereo v1.1 is a 64-bit Windows XAudio2 2.7 stereo downmix fix for Watch Dogs (2014).
 
 The project builds three independent loader binaries around one shared audio core:
 
