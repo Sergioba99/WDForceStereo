@@ -5,6 +5,7 @@
 // only the shared XAudio2 hook, configuration and downmix implementation.
 
 #include "wd_core.h"
+#include "wd_build.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -130,6 +131,9 @@ static float g_surroundGain = 0.0f;
 static float g_lfeGain = 0.0f;
 static float g_masterGain = 1.0f;
 static UINT g_logEnabled = 1;
+static UINT g_configRecreated = 0;
+static UINT g_configCreateFailed = 0;
+static const CHAR *g_loaderName = "Unknown";
 static PFN_CreateSourceVoice27 g_realCreateSourceVoice = NULL;
 static PFN_CreateMasteringVoice27 g_realCreateMasteringVoice = NULL;
 static UINT g_hooksInstalled = 0;
@@ -301,6 +305,19 @@ static void LogLine(const CHAR *s) {
   CloseHandle(f);
 }
 
+static void ResetLogForSession(void) {
+  HANDLE f;
+  if (!g_logEnabled)
+    return;
+  if (!g_logPath[0])
+    BuildPaths();
+  f = CreateFileW(g_logPath, GENERIC_WRITE,
+                  FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, CREATE_ALWAYS,
+                  FILE_ATTRIBUTE_NORMAL, NULL);
+  if (f != INVALID_HANDLE_VALUE)
+    CloseHandle(f);
+}
+
 static int ParseFloatW(const WCHAR *s, float *out) {
   UINT i = 0, digits = 0;
   float v = 0.0f, frac = 0.1f;
@@ -372,14 +389,13 @@ static void WriteDefaultConfigIfMissing(void) {
   file = CreateFileW(g_iniPath, GENERIC_WRITE, FILE_SHARE_READ, NULL,
                      CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
   if (file == INVALID_HANDLE_VALUE) {
-    LogLine(
-        "WARNING: WDForceStereo.ini is missing and could not be recreated.");
+    g_configCreateFailed = 1;
     return;
   }
 
   WriteFile(file, defaultIni, (DWORD)(sizeof(defaultIni) - 1), &written, NULL);
   CloseHandle(file);
-  LogLine("WDForceStereo.ini missing; recreated with default values.");
+  g_configRecreated = 1;
 }
 
 static float ReadIniGain(LPCWSTR key, LPCWSTR def, float fallback) {
@@ -473,13 +489,11 @@ static void ApplyConfigured6x2(const float *game, float *out) {
   for (i = 0; i < 12; ++i)
     out[i] = game[i];
 
-  /* Preserve the game's front routing and scale it. */
   out[0] *= g_frontGain;
   out[1] *= g_frontGain;
   out[6] *= g_frontGain;
   out[7] *= g_frontGain;
 
-  /* Restore the channels that Watch Dogs' own stereo matrix discards. */
   out[2] = g_centerGain;
   out[8] = g_centerGain;
   out[3] = g_lfeGain;
@@ -498,18 +512,16 @@ static void BuildStereoKernel(float *k) {
   for (i = 0; i < 12; ++i)
     k[i] = 0.0f;
 
-  /* Matrix layout: k[source + 6 * destination]. */
-  k[0] = g_frontGain;        /* FL -> L */
-  k[2] = g_centerGain;       /* FC -> L */
-  k[3] = g_lfeGain;          /* LFE -> L */
-  k[4] = g_surroundGain;     /* BL -> L */
-  k[7] = g_frontGain;        /* FR -> R */
-  k[8] = g_centerGain;       /* FC -> R */
-  k[9] = g_lfeGain;          /* LFE -> R */
-  k[11] = g_surroundGain;    /* BR -> R */
+  k[0] = g_frontGain;
+  k[2] = g_centerGain;
+  k[3] = g_lfeGain;
+  k[4] = g_surroundGain;
+  k[7] = g_frontGain;
+  k[8] = g_centerGain;
+  k[9] = g_lfeGain;
+  k[11] = g_surroundGain;
 }
 
-/* Safety fallback for a 6->6 game matrix targeting the forced stereo master. */
 static void Compose6x6To6x2(const float *game6, float *out12) {
   float k[12];
   UINT source, dest, intermediate;
@@ -535,7 +547,6 @@ static HRESULT WINAPI Hook_SetOutputMatrix(void *This, void *dest, UINT sc,
   if (!hook || !hook->setMatrix)
     return E_FAIL;
 
-  /* Only 6-channel source voices are tracked. */
   if (voice) {
     if (g_logEnabled) {
       CHAR l[280];
@@ -551,8 +562,8 @@ static HRESULT WINAPI Hook_SetOutputMatrix(void *This, void *dest, UINT sc,
     }
 
     if (m && sc == 6 && dc == 2) {
-      LogMatrixRow("  L row [FL FR FC LFE BL BR] = ", m);
-      LogMatrixRow("  R row [FL FR FC LFE BL BR] = ", m + 6);
+      LogMatrixRow("  Original L [FL FR FC LFE BL BR] = ", m);
+      LogMatrixRow("  Original R [FL FR FC LFE BL BR] = ", m + 6);
 
 #ifndef WD_DIAGNOSTIC_6TO2
       {
@@ -567,19 +578,20 @@ static HRESULT WINAPI Hook_SetOutputMatrix(void *This, void *dest, UINT sc,
             CHAR l[220];
             UINT p = 0;
             p = AppendString(l, p, sizeof(l),
-                             "  -> CONFIGURED DOWNMIX 6->2 hr=");
+                             "CONFIGURED DOWNMIX 6->2: ");
+            p = AppendString(l, p, sizeof(l), FAILED(hr) ? "FAILED hr=" : "OK hr=");
             p = AppendHex32(l, p, sizeof(l), (DWORD)hr);
             LogLine(l);
           }
-          LogMatrixRow("     L final [FL FR FC LFE BL BR] = ", configured);
-          LogMatrixRow("     R final [FL FR FC LFE BL BR] = ", configured + 6);
+          LogMatrixRow("  Final L    [FL FR FC LFE BL BR] = ", configured);
+          LogMatrixRow("  Final R    [FL FR FC LFE BL BR] = ", configured + 6);
           return hr;
         }
-        LogLine("  -> 6->2 matrix is not targeting the tracked forced-stereo "
+        LogLine("6->2 matrix target does not match the tracked forced-stereo "
                 "mastering voice; pass-through.");
       }
 #else
-      LogLine("  -> DIAGNOSTIC: actual 6->2 matrix logged; not modified.");
+      LogLine("DIAGNOSTIC: actual 6->2 matrix logged; not modified.");
 #endif
     }
 
@@ -595,7 +607,7 @@ static HRESULT WINAPI Hook_SetOutputMatrix(void *This, void *dest, UINT sc,
           CHAR l[220];
           UINT p = 0;
           p = AppendString(l, p, sizeof(l),
-                           "  -> FALLBACK rewrite 6->6 => 6->2 hr=");
+                           "FALLBACK 6->6 => 6->2: hr=");
           p = AppendHex32(l, p, sizeof(l), (DWORD)hr);
           LogLine(l);
         }
@@ -643,7 +655,7 @@ static void HookSourceVtable(void *voice) {
   }
 
   ++g_vtblCount;
-  LogLine("Installed source vtable hook: SetOutputMatrix.");
+  LogLine("Source hook installed: SetOutputMatrix.");
 }
 
 static HRESULT WINAPI Hook_CreateSourceVoice27(void *This, void **pp,
@@ -658,7 +670,6 @@ static HRESULT WINAPI Hook_CreateSourceVoice27(void *This, void **pp,
   if (!FAILED(hr) && pp && *pp) {
     HookSourceVtable(*pp);
 
-    /* The downmix fix only needs to identify 6-channel source voices. */
     if (format && format->nChannels == 6) {
       VOICE_INFO *voice = FindVoiceInfo(*pp, 1);
       if (voice) {
@@ -761,8 +772,7 @@ static void InstallEngineHooks(void *xa) {
   }
 
   g_hooksInstalled = 1;
-  LogLine("XAudio2 2.7 hooks installed: 6ch mastering -> 2ch + configurable "
-          "6->2 downmix.");
+  LogLine("XAudio2 2.7 hook installed.");
 }
 
 static int Probe(void) {
@@ -775,22 +785,26 @@ static int Probe(void) {
   int shouldUninitialize = 0;
 
   if (!LoadLibraryW(L"XAudio2_7.dll")) {
-    LogLine("Probe: XAudio2_7.dll load failed.");
+    LogLine("ERROR: XAudio2_7.dll load failed.");
     return 0;
   }
 
   ole32 = GetModuleHandleW(L"ole32.dll");
   if (!ole32)
     ole32 = LoadLibraryW(L"ole32.dll");
-  if (!ole32)
+  if (!ole32) {
+    LogLine("ERROR: ole32.dll load failed.");
     return 0;
+  }
 
   coInitialize = (PFN_CoInitializeEx)GetProcAddress(ole32, "CoInitializeEx");
   coUninitialize =
       (PFN_CoUninitialize)GetProcAddress(ole32, "CoUninitialize");
   coCreate = (PFN_CoCreateInstance)GetProcAddress(ole32, "CoCreateInstance");
-  if (!coCreate)
+  if (!coCreate) {
+    LogLine("ERROR: CoCreateInstance unavailable.");
     return 0;
+  }
 
   initHr = coInitialize ? coInitialize(NULL, 0) : S_OK;
   if (initHr == S_OK || initHr == 1)
@@ -802,7 +816,7 @@ static int Probe(void) {
   if (g_logEnabled) {
     CHAR l[150];
     UINT p = 0;
-    p = AppendString(l, p, sizeof(l), "Probe CoCreateInstance hr=");
+    p = AppendString(l, p, sizeof(l), "XAudio2 probe CoCreateInstance: hr=");
     p = AppendHex32(l, p, sizeof(l), (DWORD)hr);
     LogLine(l);
   }
@@ -820,19 +834,42 @@ static int Probe(void) {
   return g_hooksInstalled ? 1 : 0;
 }
 
+static void LogStartupHeader(void) {
+  CHAR l[360];
+  UINT p = 0;
+
+  LogLine("============================================================");
+  LogLine("WDForceStereo v1.0");
+
+  p = AppendString(l, p, sizeof(l), "Build: ");
+  p = AppendString(l, p, sizeof(l), WD_BUILD_ID);
+  LogLine(l);
+
+  p = 0;
+  p = AppendString(l, p, sizeof(l), "Loader: ");
+  p = AppendString(l, p, sizeof(l), g_loaderName ? g_loaderName : "Unknown");
+  LogLine(l);
+  LogLine("============================================================");
+
+  if (g_configRecreated)
+    LogLine("Config: WDForceStereo.ini was missing and was recreated.");
+  else if (g_configCreateFailed)
+    LogLine("WARNING: WDForceStereo.ini was missing and could not be recreated; using compiled defaults.");
+}
+
 static DWORD WINAPI HookThread(LPVOID unused) {
+  int probeOk;
   (void)unused;
+
   BuildPaths();
   LoadConfig();
+  ResetLogForSession();
+  LogStartupHeader();
 
 #ifdef WD_DIAGNOSTIC_6TO2
-  LogLine("=== WDForceStereo 1.0 DIAGNOSTIC 6->2 MATRIX ===");
-  LogLine("Mode: force game's 6ch mastering to 2ch, log the actual 6->2 "
-          "matrix, modify matrix NOTHING.");
+  LogLine("Mode: DIAGNOSTIC 6->2 matrix (matrix is not modified).");
 #else
-  LogLine("=== WDForceStereo 1.0 CONFIGURABLE DOWNMIX ===");
-  LogLine("Mode: force game's 6ch mastering to 2ch and tune the 6->2 matrix "
-          "from WDForceStereo.ini.");
+  LogLine("Mode: configurable 6->2 stereo downmix.");
 #endif
 
   if (g_logEnabled) {
@@ -849,24 +886,23 @@ static DWORD WINAPI HookThread(LPVOID unused) {
     p = AppendString(l, p, sizeof(l), " MasterGain=");
     p = AppendFloat3(l, p, sizeof(l), g_masterGain);
     LogLine(l);
-    LogLine("Matrix order: destination rows L/R; source columns FL FR FC LFE "
-            "BL BR.");
   }
 
-  if (Probe())
-    LogLine("Engine hook active.");
+  probeOk = Probe();
+  if (probeOk)
+    LogLine("Initialization: config=OK | XAudio2 hook=OK");
   else
-    LogLine("ERROR: XAudio2 probe failed.");
+    LogLine("Initialization: config=OK | XAudio2 hook=FAILED");
+
   return 0;
 }
 
-void WDCoreProcessAttach(void *module) {
+void WDCoreProcessAttach(void *module, const char *loaderName) {
   HANDLE thread;
 
+  g_loaderName = loaderName ? loaderName : "Unknown";
   DisableThreadLibraryCalls((HMODULE)module);
 
-  /* Keep loader-lock work minimal. All config, logging, COM and XAudio2 work
-     happens on the worker thread. */
   thread = CreateThread(NULL, 0, HookThread, NULL, 0, NULL);
   if (thread)
     CloseHandle(thread);
