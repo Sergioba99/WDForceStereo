@@ -1,6 +1,8 @@
 // DInput8 loader/proxy layer for WDForceStereo.
 // Shared audio/XAudio2 logic lives in wd_core.c.
 
+#include "wd_core.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -12,7 +14,6 @@ typedef unsigned long DWORD;
 typedef long HRESULT;
 typedef int BOOL;
 typedef void *HMODULE;
-typedef void *HINSTANCE;
 typedef void *FARPROC;
 typedef void *LPVOID;
 typedef const unsigned short *LPCWSTR;
@@ -21,7 +22,6 @@ typedef void *LPUNKNOWN;
 
 #define WINAPI __stdcall
 #define TRUE 1
-#define FALSE 0
 #define NULL 0
 #define DLL_PROCESS_ATTACH 1
 #define MAX_PATH 260
@@ -43,8 +43,6 @@ typedef HRESULT(WINAPI *PFN_DllGetClassObject)(const GUID *, const GUID *,
 __declspec(dllimport) UINT WINAPI GetSystemDirectoryW(unsigned short *, UINT);
 __declspec(dllimport) HMODULE WINAPI LoadLibraryW(LPCWSTR);
 __declspec(dllimport) FARPROC WINAPI GetProcAddress(HMODULE, LPCSTR);
-
-void WDCoreProcessAttach(HINSTANCE module);
 
 static HMODULE g_realDinput8 = NULL;
 
