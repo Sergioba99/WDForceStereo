@@ -17,7 +17,7 @@ jobs:
         shell: pwsh
         run: lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
 
-      - name: Compile WDForceStereo core
+      - name: Compile optimized WDForceStereo core
         shell: pwsh
         run: >-
           clang --target=x86_64-pc-windows-msvc -c src/wd_core.c
@@ -45,28 +45,28 @@ jobs:
           -o asi_entry.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Link complete DInput8 proxy
+      - name: Link DInput8 proxy
         shell: pwsh
         run: >-
           lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
           wd_core.obj dinput8_proxy.obj kernel32.lib
           /def:src/exports.def /out:dinput8.dll
 
-      - name: Link complete WinMM proxy
+      - name: Link WinMM proxy
         shell: pwsh
         run: >-
           lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
           wd_core.obj winmm_proxy.obj kernel32.lib
           /def:src/winmm_exports.def /out:winmm.dll
 
-      - name: Link dedicated ASI plugin
+      - name: Link ASI plugin
         shell: pwsh
         run: >-
           lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
           wd_core.obj asi_entry.obj kernel32.lib
           /out:WDForceStereo.asi
 
-      - name: Stage three-route test artifact
+      - name: Stage optimized-core regression artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-package | Out-Null
@@ -76,25 +76,20 @@ jobs:
           Copy-Item .\release\WDForceStereo.ini test-package\WDForceStereo.ini
           git rev-parse --short HEAD | Out-File -Encoding ascii test-package\BUILD_COMMIT.txt
           @"
-          TEST PURPOSE: three independent WDForceStereo loader routes.
+          TEST PURPOSE: optimized shared-core regression test.
 
-          dinput8.dll:
-          - Standalone proxy route.
-          - Shared WDForceStereo core.
-          - Complete DInput8 x64 export surface.
+          The audio behavior and INI semantics are intended to remain unchanged.
+          This build removes obsolete diagnostic state, redundant source-voice
+          hooks/state, duplicated path storage, redundant log file operations,
+          and unnecessary dynamic kernel32 lookup while keeping all three loader
+          routes independent.
 
-          winmm.dll:
-          - Early-load proxy route compatible with NexusTools' own dinput8.dll.
-          - Shared WDForceStereo core.
-          - Complete WinMM x64 export surface.
+          Test each route separately:
+          - dinput8.dll standalone
+          - winmm.dll with NexusTools' dinput8.dll
+          - WDForceStereo.asi with NexusTools
 
-          WDForceStereo.asi:
-          - Dedicated native ASI plugin; no copied/renamed DInput8 binary.
-          - Shared WDForceStereo core.
-          - Intended for NexusTools ASI Injection Helper testing.
-
-          Test each route separately. Do not install more than one WDForceStereo
-          loader at the same time for this build.
+          Do not install more than one WDForceStereo loader at the same time.
           "@ | Out-File -Encoding ascii test-package\TEST_README.txt
 
       - name: Show SHA256
@@ -107,7 +102,7 @@ jobs:
       - name: Upload temporary test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-three-loader-test
+          name: WDForceStereo-optimized-core-test
           path: test-package/
           if-no-files-found: error
           retention-days: 7
