@@ -17,10 +17,10 @@ jobs:
         shell: pwsh
         run: lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
 
-      - name: Compile WDForceStereo core wrapper
+      - name: Compile WDForceStereo core
         shell: pwsh
         run: >-
-          clang --target=x86_64-pc-windows-msvc -c src/wd_core_wrap.c
+          clang --target=x86_64-pc-windows-msvc -c src/wd_core.c
           -o wd_core.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
@@ -31,34 +31,74 @@ jobs:
           -o dinput8_proxy.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Link refactored DInput8 test DLL
+      - name: Compile complete WinMM proxy layer
+        shell: pwsh
+        run: >-
+          clang --target=x86_64-pc-windows-msvc -c src/winmm_proxy.c
+          -o winmm_proxy.obj -O2 -ffreestanding -fno-builtin
+          -fno-stack-protector -Wno-incompatible-library-redeclaration
+
+      - name: Link complete DInput8 proxy
         shell: pwsh
         run: >-
           lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
           wd_core.obj dinput8_proxy.obj kernel32.lib
           /def:src/exports.def /out:dinput8.dll
 
-      - name: Stage regression-test artifact
+      - name: Link complete WinMM proxy
+        shell: pwsh
+        run: >-
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
+          wd_core.obj winmm_proxy.obj kernel32.lib
+          /def:src/winmm_exports.def /out:winmm.dll
+
+      - name: Stage proxy test artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-package | Out-Null
           Copy-Item .\dinput8.dll test-package\dinput8.dll
+          Copy-Item .\winmm.dll test-package\winmm.dll
           Copy-Item .\release\WDForceStereo.ini test-package\WDForceStereo.ini
           git rev-parse --short HEAD | Out-File -Encoding ascii test-package\BUILD_COMMIT.txt
           @"
-          TEST PURPOSE: DInput8/core separation regression test.
-          Replace only the standalone WDForceStereo dinput8.dll for this test.
-          WinMM and ASI experiments are intentionally not part of this artifact.
+          TEST PURPOSE: complete proxy forwarding regression test.
+
+          dinput8.dll:
+          - Shared validated WDForceStereo core.
+          - Complete DInput8 x64 export surface (5 exports).
+          - Each DInput8 call is forwarded to the real System32 dinput8.dll.
+
+          winmm.dll:
+          - Same shared WDForceStereo core.
+          - Complete 192-entry WinMM x64 export surface used by mature proxy loaders.
+          - Each WinMM call is forwarded to the real System32 winmm.dll.
+
+          Test DInput8:
+          - Close the game/NexusTools.
+          - Temporarily rename NexusTools' dinput8.dll (for example dinput8.dll.nexustools).
+          - Install this dinput8.dll + WDForceStereo.ini.
+          - Do NOT install winmm.dll for this test.
+
+          Test WinMM with NexusTools:
+          - Restore NexusTools' own dinput8.dll.
+          - Remove WDForceStereo's dinput8.dll.
+          - Install this winmm.dll + WDForceStereo.ini.
+          - Do NOT install WDForceStereo.asi for this test.
+
+          Test the two proxy routes separately. Do not install WDForceStereo dinput8.dll
+          and winmm.dll simultaneously yet because both currently start the shared core.
           "@ | Out-File -Encoding ascii test-package\TEST_README.txt
 
       - name: Show SHA256
         shell: pwsh
-        run: Get-FileHash .\dinput8.dll -Algorithm SHA256
+        run: |
+          Get-FileHash .\dinput8.dll -Algorithm SHA256
+          Get-FileHash .\winmm.dll -Algorithm SHA256
 
       - name: Upload temporary test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-dinput8-refactor-test
+          name: WDForceStereo-complete-proxy-test
           path: test-package/
           if-no-files-found: error
           retention-days: 7
