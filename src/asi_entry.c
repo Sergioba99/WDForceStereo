@@ -20,7 +20,7 @@ typedef void *LPVOID;
 BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID reserved) {
   (void)reserved;
   if (reason == DLL_PROCESS_ATTACH)
-    WDCoreProcessAttach(h);
+    WDCoreProcessAttach(h, "ASI");
   return TRUE;
 }
 
