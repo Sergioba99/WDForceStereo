@@ -6,6 +6,8 @@
 // is uniform and the optimized stub becomes a direct tail jump, preserving the
 // caller's integer, floating-point and stack arguments.
 
+#include "wd_core.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -18,7 +20,6 @@ typedef unsigned short WCHAR;
 typedef const WCHAR *LPCWSTR;
 typedef const char *LPCSTR;
 typedef void *HMODULE;
-typedef void *HINSTANCE;
 typedef void *FARPROC;
 typedef void *LPVOID;
 
@@ -31,8 +32,6 @@ typedef void *LPVOID;
 __declspec(dllimport) UINT WINAPI GetSystemDirectoryW(WCHAR *, UINT);
 __declspec(dllimport) HMODULE WINAPI LoadLibraryW(LPCWSTR);
 __declspec(dllimport) FARPROC WINAPI GetProcAddress(HMODULE, LPCSTR);
-
-void WDCoreProcessAttach(HINSTANCE module);
 
 typedef ULONG_PTR(WINAPI *PFN_GENERIC_WINMM)(void);
 
