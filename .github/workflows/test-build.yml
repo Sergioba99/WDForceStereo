@@ -31,35 +31,58 @@ jobs:
           -o dinput8_proxy.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Link extracted-core DInput8 test DLL
+      - name: Compile WinMM proxy layer
+        shell: pwsh
+        run: >-
+          clang --target=x86_64-pc-windows-msvc -c src/winmm_proxy.c
+          -o winmm_proxy.obj -O2 -ffreestanding -fno-builtin
+          -fno-stack-protector -Wno-incompatible-library-redeclaration
+
+      - name: Link DInput8 regression DLL
         shell: pwsh
         run: >-
           lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
           wd_core.obj dinput8_proxy.obj kernel32.lib
           /def:src/exports.def /out:dinput8.dll
 
-      - name: Stage regression-test artifact
+      - name: Link experimental WinMM DLL
+        shell: pwsh
+        run: >-
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
+          wd_core.obj winmm_proxy.obj kernel32.lib
+          /def:src/winmm_exports.def /out:winmm.dll
+
+      - name: Stage test artifact
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path test-package | Out-Null
           Copy-Item .\dinput8.dll test-package\dinput8.dll
+          Copy-Item .\winmm.dll test-package\winmm.dll
           Copy-Item .\release\WDForceStereo.ini test-package\WDForceStereo.ini
           git rev-parse --short HEAD | Out-File -Encoding ascii test-package\BUILD_COMMIT.txt
           @"
-          TEST PURPOSE: physical core extraction regression test.
-          Audio/XAudio2 logic now builds from src/wd_core.c.
-          DInput8 forwarding lives in src/dinput8_proxy.c.
-          WinMM and ASI experiments are intentionally not part of this artifact.
+          TEST PURPOSE: shared-core WinMM loader experiment.
+
+          dinput8.dll = validated shared-core standalone proxy regression build.
+          winmm.dll   = experimental proxy using the same wd_core.c and forwarding timeGetTime.
+
+          WinMM test with NexusTools:
+          - Keep NexusTools' own dinput8.dll in place.
+          - Put this winmm.dll beside watch_dogs.exe.
+          - Put WDForceStereo.ini beside watch_dogs.exe.
+          - Do NOT install WDForceStereo.asi for this test.
           "@ | Out-File -Encoding ascii test-package\TEST_README.txt
 
       - name: Show SHA256
         shell: pwsh
-        run: Get-FileHash .\dinput8.dll -Algorithm SHA256
+        run: |
+          Get-FileHash .\dinput8.dll -Algorithm SHA256
+          Get-FileHash .\winmm.dll -Algorithm SHA256
 
       - name: Upload temporary test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-core-extraction-test
+          name: WDForceStereo-winmm-shared-core-test
           path: test-package/
           if-no-files-found: error
           retention-days: 7
