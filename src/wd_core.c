@@ -1,4 +1,4 @@
-// WDForceStereo v1.0 core - Watch Dogs (2014), configurable XAudio2 2.7
+// WDForceStereo core - Watch Dogs (2014), configurable XAudio2 2.7
 // stereo downmix x64, no CRT.
 //
 // Loader-specific code lives in separate translation units. This file contains
@@ -839,8 +839,11 @@ static void LogStartupHeader(void) {
   UINT p = 0;
 
   LogLine("============================================================");
-  LogLine("WDForceStereo v1.0");
+  p = AppendString(l, p, sizeof(l), "WDForceStereo v");
+  p = AppendString(l, p, sizeof(l), WD_VERSION);
+  LogLine(l);
 
+  p = 0;
   p = AppendString(l, p, sizeof(l), "Build: ");
   p = AppendString(l, p, sizeof(l), WD_BUILD_ID);
   LogLine(l);
