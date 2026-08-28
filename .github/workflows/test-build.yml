@@ -20,10 +20,11 @@ jobs:
           @"
           #ifndef WD_FORCE_STEREO_BUILD_H
           #define WD_FORCE_STEREO_BUILD_H
+          #define WD_VERSION "1.1"
           #define WD_BUILD_ID "$id"
           #endif
           "@ | Out-File -Encoding ascii src\wd_build.h
-          Write-Host "WDForceStereo build: $id"
+          Write-Host "WDForceStereo v1.1 build: $id"
 
       - name: Build kernel32 import library
         shell: pwsh
@@ -71,7 +72,7 @@ jobs:
       - name: Upload temporary test artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-final-regression-test
+          name: WDForceStereo-v1.1-regression-test
           path: test-package/
           if-no-files-found: error
           retention-days: 7
