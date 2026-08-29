@@ -84,7 +84,6 @@ jobs:
           Copy-Item .\WDForceStereo.asi "$folder\WDForceStereo.asi"
           Copy-Item .\release\WDForceStereo.ini "$folder\WDForceStereo.ini"
           Copy-Item .\release\INSTALL.txt "$folder\INSTALL.txt"
-          git rev-parse --short HEAD | Out-File -Encoding ascii "$folder\BUILD_COMMIT.txt"
           Compress-Archive -Path "$folder\*" -DestinationPath "WDForceStereo-v$version.zip" -Force
 
           Get-FileHash .\dinput8.dll -Algorithm SHA256 | Format-List
@@ -100,29 +99,28 @@ jobs:
           $tag = '${{ steps.version.outputs.tag }}'
           $version = '${{ steps.version.outputs.version }}'
           $zip = ".\WDForceStereo-v$version.zip"
-
-          $assets = @(
-            "$zip#WDForceStereo v$version",
-            ".\dinput8.dll#dinput8.dll (standalone)",
-            ".\winmm.dll#winmm.dll (proxy / NexusTools option)",
-            ".\WDForceStereo.asi#WDForceStereo.asi (NexusTools ASI option)",
-            ".\release\WDForceStereo.ini#WDForceStereo.ini",
-            ".\release\INSTALL.txt#Installation instructions"
-          )
+          $asset = "$zip#WDForceStereo v$version"
 
           gh release view $tag --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; replacing release assets."
-            gh release upload $tag @assets --repo '${{ github.repository }}' --clobber
+            Write-Host "Release $tag already exists; replacing all release assets with the ZIP package."
+            $existingAssets = gh release view $tag --repo '${{ github.repository }}' --json assets --jq '.assets[].name'
+            foreach ($existingAsset in $existingAssets) {
+              if ($existingAsset) {
+                gh release delete-asset $tag $existingAsset --repo '${{ github.repository }}' --yes
+                if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              }
+            }
+            gh release upload $tag $asset --repo '${{ github.repository }}'
             exit $LASTEXITCODE
           }
 
           git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Tag $tag already exists; creating release from the existing tag."
-            gh release create $tag @assets --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes
+            gh release create $tag $asset --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes
             exit $LASTEXITCODE
           }
 
           Write-Host "Tag $tag does not exist; creating a new release and tag."
-          gh release create $tag @assets --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes
+          gh release create $tag $asset --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes
