@@ -15,32 +15,77 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Stamp build identity
+        shell: pwsh
+        run: |
+          $id = (git rev-parse --short HEAD).Trim()
+          @"
+          #ifndef WD_FORCE_STEREO_BUILD_H
+          #define WD_FORCE_STEREO_BUILD_H
+          #define WD_VERSION "1.1"
+          #define WD_BUILD_ID "$id"
+          #endif
+          "@ | Out-File -Encoding ascii src\wd_build.h
+          Write-Host "WDForceStereo v1.1 build: $id"
+
       - name: Build kernel32 import library
         shell: pwsh
         run: lld-link /lib /machine:x64 /def:kernel32.def /out:kernel32.lib
 
-      - name: Compile
+      - name: Compile shared core
         shell: pwsh
         run: >-
-          clang --target=x86_64-pc-windows-msvc -c src/wd_force_stereo.c
-          -o wd_force_stereo.obj -O2 -ffreestanding -fno-builtin
+          clang --target=x86_64-pc-windows-msvc -c src/wd_core.c
+          -o wd_core.obj -O2 -ffreestanding -fno-builtin
           -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Link
+      - name: Compile DInput8 proxy
         shell: pwsh
         run: >-
-          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib
-          wd_force_stereo.obj kernel32.lib
-          /def:src/exports.def /out:dinput8.dll
+          clang --target=x86_64-pc-windows-msvc -c src/dinput8_proxy.c
+          -o dinput8_proxy.obj -O2 -ffreestanding -fno-builtin
+          -fno-stack-protector -Wno-incompatible-library-redeclaration
 
-      - name: Create NexusTools ASI
+      - name: Compile WinMM proxy
         shell: pwsh
-        run: Copy-Item .\dinput8.dll .\WDForceStereo.asi
+        run: >-
+          clang --target=x86_64-pc-windows-msvc -c src/winmm_proxy.c
+          -o winmm_proxy.obj -O2 -ffreestanding -fno-builtin
+          -fno-stack-protector -Wno-incompatible-library-redeclaration
+
+      - name: Compile ASI entry
+        shell: pwsh
+        run: >-
+          clang --target=x86_64-pc-windows-msvc -c src/asi_entry.c
+          -o asi_entry.obj -O2 -ffreestanding -fno-builtin
+          -fno-stack-protector -Wno-incompatible-library-redeclaration
+
+      - name: Link DInput8 proxy
+        shell: pwsh
+        run: >-
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
+          wd_core.obj dinput8_proxy.obj kernel32.lib
+          /def:src/dinput8_exports.def /out:dinput8.dll
+
+      - name: Link WinMM proxy
+        shell: pwsh
+        run: >-
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
+          wd_core.obj winmm_proxy.obj kernel32.lib
+          /def:src/winmm_exports.def /out:winmm.dll
+
+      - name: Link ASI plugin
+        shell: pwsh
+        run: >-
+          lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref
+          wd_core.obj asi_entry.obj kernel32.lib
+          /out:WDForceStereo.asi
 
       - name: Show SHA256
         shell: pwsh
         run: |
           Get-FileHash .\dinput8.dll -Algorithm SHA256
+          Get-FileHash .\winmm.dll -Algorithm SHA256
           Get-FileHash .\WDForceStereo.asi -Algorithm SHA256
 
       - name: Stage package
@@ -48,13 +93,15 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path package | Out-Null
           Copy-Item .\dinput8.dll package\dinput8.dll
+          Copy-Item .\winmm.dll package\winmm.dll
           Copy-Item .\WDForceStereo.asi package\WDForceStereo.asi
           Copy-Item .\release\WDForceStereo.ini package\WDForceStereo.ini
           Copy-Item .\release\INSTALL.txt package\INSTALL.txt
+          git rev-parse --short HEAD | Out-File -Encoding ascii package\BUILD_COMMIT.txt
 
       - name: Upload package
         uses: actions/upload-artifact@v4
         with:
-          name: WDForceStereo-v1.0
+          name: WDForceStereo-v1.1
           path: package/
           if-no-files-found: error

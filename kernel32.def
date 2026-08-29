@@ -11,6 +11,5 @@ CloseHandle
 VirtualProtect
 CreateFileW
 WriteFile
-SetFilePointer
 GetPrivateProfileStringW
 GetFileAttributesW
