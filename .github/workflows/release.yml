@@ -1,4 +1,4 @@
-name: Build WDForceStereo Draft Release
+name: Publish WDForceStereo Checksums
 
 on:
   push:
@@ -73,7 +73,7 @@ jobs:
           lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj winmm_proxy.obj kernel32.lib /def:src/winmm_exports.def /out:winmm.dll
           lld-link /dll /machine:x64 /entry:DllMain /nodefaultlib /opt:ref wd_core.obj asi_entry.obj kernel32.lib /out:WDForceStereo.asi
 
-      - name: Stage release package
+      - name: Build package and checksums
         shell: pwsh
         run: |
           $version = '${{ steps.version.outputs.version }}'
@@ -98,23 +98,19 @@ jobs:
           $checksums | Set-Content -Encoding ascii .\SHA256SUMS.txt
           Get-Content .\SHA256SUMS.txt
 
-      - name: Create or update private draft release
+      - name: Publish checksum-only GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = '${{ steps.version.outputs.tag }}'
           $version = '${{ steps.version.outputs.version }}'
-          $zip = ".\WDForceStereo-v$version.zip"
-          $assets = @(
-            "$zip#WDForceStereo v$version",
-            ".\SHA256SUMS.txt#SHA-256 checksums"
-          )
+          $checksumAsset = ".\SHA256SUMS.txt#SHA-256 checksums"
 
           gh release view $tag --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; forcing draft status and replacing assets with ZIP + SHA256SUMS.txt."
-            gh release edit $tag --repo '${{ github.repository }}' --draft
+            Write-Host "Release $tag already exists; publishing it and replacing all assets with SHA256SUMS.txt only."
+            gh release edit $tag --repo '${{ github.repository }}' --draft=false
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
             $existingAssets = gh release view $tag --repo '${{ github.repository }}' --json assets --jq '.assets[].name'
@@ -124,16 +120,16 @@ jobs:
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
               }
             }
-            gh release upload $tag @assets --repo '${{ github.repository }}'
+            gh release upload $tag $checksumAsset --repo '${{ github.repository }}'
             exit $LASTEXITCODE
           }
 
           git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Tag $tag already exists; creating a private draft release from the existing tag."
-            gh release create $tag @assets --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes --draft
+            Write-Host "Tag $tag already exists; creating a public checksum-only release from the existing tag."
+            gh release create $tag $checksumAsset --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes
             exit $LASTEXITCODE
           }
 
-          Write-Host "Tag $tag does not exist; creating a new private draft release and tag."
-          gh release create $tag @assets --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes --draft
+          Write-Host "Tag $tag does not exist; creating a new public checksum-only release and tag."
+          gh release create $tag $checksumAsset --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes
