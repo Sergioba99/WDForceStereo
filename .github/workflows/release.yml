@@ -1,4 +1,4 @@
-name: Publish WDForceStereo Release
+name: Build WDForceStereo Draft Release
 
 on:
   push:
@@ -98,7 +98,7 @@ jobs:
           $checksums | Set-Content -Encoding ascii .\SHA256SUMS.txt
           Get-Content .\SHA256SUMS.txt
 
-      - name: Publish or update GitHub Release
+      - name: Create or update private draft release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -113,7 +113,10 @@ jobs:
 
           gh release view $tag --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; replacing release assets with ZIP + SHA256SUMS.txt."
+            Write-Host "Release $tag already exists; forcing draft status and replacing assets with ZIP + SHA256SUMS.txt."
+            gh release edit $tag --repo '${{ github.repository }}' --draft
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
             $existingAssets = gh release view $tag --repo '${{ github.repository }}' --json assets --jq '.assets[].name'
             foreach ($existingAsset in $existingAssets) {
               if ($existingAsset) {
@@ -127,10 +130,10 @@ jobs:
 
           git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Tag $tag already exists; creating release from the existing tag."
-            gh release create $tag @assets --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes
+            Write-Host "Tag $tag already exists; creating a private draft release from the existing tag."
+            gh release create $tag @assets --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes --draft
             exit $LASTEXITCODE
           }
 
-          Write-Host "Tag $tag does not exist; creating a new release and tag."
-          gh release create $tag @assets --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes
+          Write-Host "Tag $tag does not exist; creating a new private draft release and tag."
+          gh release create $tag @assets --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes --draft
