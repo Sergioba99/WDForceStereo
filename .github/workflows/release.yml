@@ -98,6 +98,15 @@ jobs:
           $checksums | Set-Content -Encoding ascii .\SHA256SUMS.txt
           Get-Content .\SHA256SUMS.txt
 
+      - name: Upload exact release ZIP as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WDForceStereo-v${{ steps.version.outputs.version }}-release-package
+          path: WDForceStereo-v${{ steps.version.outputs.version }}.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
       - name: Publish checksum-only GitHub Release
         shell: pwsh
         env:
