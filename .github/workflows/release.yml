@@ -78,18 +78,25 @@ jobs:
         run: |
           $version = '${{ steps.version.outputs.version }}'
           $folder = "WDForceStereo-v$version"
+          $zip = "WDForceStereo-v$version.zip"
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
           Copy-Item .\dinput8.dll "$folder\dinput8.dll"
           Copy-Item .\winmm.dll "$folder\winmm.dll"
           Copy-Item .\WDForceStereo.asi "$folder\WDForceStereo.asi"
           Copy-Item .\release\WDForceStereo.ini "$folder\WDForceStereo.ini"
           Copy-Item .\release\INSTALL.txt "$folder\INSTALL.txt"
-          Compress-Archive -Path "$folder\*" -DestinationPath "WDForceStereo-v$version.zip" -Force
+          Compress-Archive -Path "$folder\*" -DestinationPath $zip -Force
 
-          Get-FileHash .\dinput8.dll -Algorithm SHA256 | Format-List
-          Get-FileHash .\winmm.dll -Algorithm SHA256 | Format-List
-          Get-FileHash .\WDForceStereo.asi -Algorithm SHA256 | Format-List
-          Get-FileHash ".\WDForceStereo-v$version.zip" -Algorithm SHA256 | Format-List
+          $checksums = @(
+            "{0}  dinput8.dll" -f (Get-FileHash .\dinput8.dll -Algorithm SHA256).Hash.ToLower()
+            "{0}  winmm.dll" -f (Get-FileHash .\winmm.dll -Algorithm SHA256).Hash.ToLower()
+            "{0}  WDForceStereo.asi" -f (Get-FileHash .\WDForceStereo.asi -Algorithm SHA256).Hash.ToLower()
+            "{0}  WDForceStereo.ini" -f (Get-FileHash .\release\WDForceStereo.ini -Algorithm SHA256).Hash.ToLower()
+            "{0}  INSTALL.txt" -f (Get-FileHash .\release\INSTALL.txt -Algorithm SHA256).Hash.ToLower()
+            "{0}  $zip" -f (Get-FileHash ".\$zip" -Algorithm SHA256).Hash.ToLower()
+          )
+          $checksums | Set-Content -Encoding ascii .\SHA256SUMS.txt
+          Get-Content .\SHA256SUMS.txt
 
       - name: Publish or update GitHub Release
         shell: pwsh
@@ -99,11 +106,14 @@ jobs:
           $tag = '${{ steps.version.outputs.tag }}'
           $version = '${{ steps.version.outputs.version }}'
           $zip = ".\WDForceStereo-v$version.zip"
-          $asset = "$zip#WDForceStereo v$version"
+          $assets = @(
+            "$zip#WDForceStereo v$version",
+            ".\SHA256SUMS.txt#SHA-256 checksums"
+          )
 
           gh release view $tag --repo '${{ github.repository }}' *> $null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; replacing all release assets with the ZIP package."
+            Write-Host "Release $tag already exists; replacing release assets with ZIP + SHA256SUMS.txt."
             $existingAssets = gh release view $tag --repo '${{ github.repository }}' --json assets --jq '.assets[].name'
             foreach ($existingAsset in $existingAssets) {
               if ($existingAsset) {
@@ -111,16 +121,16 @@ jobs:
                 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
               }
             }
-            gh release upload $tag $asset --repo '${{ github.repository }}'
+            gh release upload $tag @assets --repo '${{ github.repository }}'
             exit $LASTEXITCODE
           }
 
           git ls-remote --exit-code --tags origin "refs/tags/$tag" *> $null
           if ($LASTEXITCODE -eq 0) {
             Write-Host "Tag $tag already exists; creating release from the existing tag."
-            gh release create $tag $asset --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes
+            gh release create $tag @assets --repo '${{ github.repository }}' --verify-tag --title "WDForceStereo v$version" --generate-notes
             exit $LASTEXITCODE
           }
 
           Write-Host "Tag $tag does not exist; creating a new release and tag."
-          gh release create $tag $asset --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes
+          gh release create $tag @assets --repo '${{ github.repository }}' --target '${{ github.sha }}' --title "WDForceStereo v$version" --generate-notes
