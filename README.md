@@ -62,10 +62,10 @@ Do **not** install more than one WDForceStereo loader at the same time. In parti
 ```ini
 [Audio]
 FrontGain=1.000
-CenterGain=1.000
-SurroundGain=0.000
-LFEGain=0.000
-MasterGain=1.000
+CenterGain=1.250
+SurroundGain=0.707
+LFEGain=0.500
+MasterGain=0.900
 
 [Debug]
 Log=1
@@ -80,7 +80,9 @@ Log=1
 
 Gain values are clamped to `0.0`–`4.0`. Both `.` and `,` are accepted as decimal separators. Configuration is read at startup, so restart Watch Dogs after editing the INI.
 
-The defaults reproduce the known-working dialogue fix. If `WDForceStereo.ini` is missing, the mod recreates it next to `watch_dogs.exe` using the safe defaults when possible. If the directory is not writable, the compiled defaults remain active.
+The defaults fold front, center, rear/surround and LFE audio into stereo, with a slight center boost and a final global gain of `0.900`. Keeping rear channels audible avoids discarding voices or other sounds routed behind the camera. If `WDForceStereo.ini` is missing, the mod recreates it next to `watch_dogs.exe` using these defaults when possible. If the directory is not writable, the compiled defaults remain active. Missing or invalid gain values also fall back to these defaults.
+
+When updating, replace the old `WDForceStereo.ini` with the included file to use the new defaults, or remove the old INI and let the updated mod recreate it. Existing INI files are preserved, so an older `SurroundGain=0.000` setting continues to mute rear channels. Back up a customized INI before replacing it.
 
 Useful linear-gain references:
 
@@ -108,13 +110,12 @@ R       0    1    0    0    0    0
 
 The stereo path therefore discarded Front Center entirely. With the default WDForceStereo configuration, the repaired matrix is effectively:
 
-```text
-        FL   FR   FC   LFE  BL   BR
-L       1    0    1    0    0    0
-R       0    1    1    0    0    0
-```
+| Output | FL | FR | FC | LFE | BL | BR |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| L | 0.900 | 0 | 1.125 | 0.450 | 0.6363 | 0 |
+| R | 0 | 0.900 | 1.125 | 0.450 | 0 | 0.6363 |
 
-`SurroundGain` and `LFEGain` can optionally fold those channels into stereo as well.
+These coefficients include `MasterGain=0.900` and assume the observed front-only game matrix shown above. `SurroundGain` and `LFEGain` control the rear and LFE contributions.
 
 ## Source layout
 
