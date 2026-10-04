@@ -54,6 +54,10 @@ Audio gains can be adjusted in WDForceStereo.ini. Changes are read when the game
 
 If WDForceStereo.ini is missing, the mod recreates it automatically with the default values when possible.
 
+The default mix includes rear-channel audio so sounds routed behind the camera are not discarded.
+
+When updating, replace the old WDForceStereo.ini with the included file, or delete the old INI and let the updated mod recreate it. Existing INI files are preserved; an old SurroundGain=0.000 setting will still mute rear channels. Back up customized settings before replacing the file.
+
 SUPPORT / LOGGING
 -----------------
 

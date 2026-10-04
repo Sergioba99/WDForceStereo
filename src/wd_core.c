@@ -126,10 +126,10 @@ typedef void(WINAPI *PFN_GetVoiceDetails27)(void *,
                                             XAUDIO2_VOICE_DETAILS_MIN *);
 
 static float g_frontGain = 1.0f;
-static float g_centerGain = 1.0f;
-static float g_surroundGain = 0.0f;
-static float g_lfeGain = 0.0f;
-static float g_masterGain = 1.0f;
+static float g_centerGain = 1.25f;
+static float g_surroundGain = 0.707f;
+static float g_lfeGain = 0.5f;
+static float g_masterGain = 0.9f;
 static UINT g_logEnabled = 1;
 static UINT g_configRecreated = 0;
 static UINT g_configCreateFailed = 0;
@@ -367,13 +367,13 @@ static void WriteDefaultConfigIfMissing(void) {
       "; Front left/right gain\r\n"
       "FrontGain=1.000\r\n"
       "; Dialogue/front-center gain\r\n"
-      "CenterGain=1.000\r\n"
+      "CenterGain=1.250\r\n"
       "; Rear/surround fold-down gain\r\n"
-      "SurroundGain=0.000\r\n"
+      "SurroundGain=0.707\r\n"
       "; Subwoofer/LFE fold-down gain\r\n"
-      "LFEGain=0.000\r\n"
+      "LFEGain=0.500\r\n"
       "; Final global multiplier\r\n"
-      "MasterGain=1.000\r\n"
+      "MasterGain=0.900\r\n"
       "\r\n"
       "[Debug]\r\n"
       "; 1 = create WDForceStereo.log, 0 = disable logging\r\n"
@@ -419,10 +419,10 @@ static void LoadConfig(void) {
   WriteDefaultConfigIfMissing();
 
   g_frontGain = ReadIniGain(L"FrontGain", L"1.0", 1.0f);
-  g_centerGain = ReadIniGain(L"CenterGain", L"1.0", 1.0f);
-  g_surroundGain = ReadIniGain(L"SurroundGain", L"0.0", 0.0f);
-  g_lfeGain = ReadIniGain(L"LFEGain", L"0.0", 0.0f);
-  g_masterGain = ReadIniGain(L"MasterGain", L"1.0", 1.0f);
+  g_centerGain = ReadIniGain(L"CenterGain", L"1.250", 1.25f);
+  g_surroundGain = ReadIniGain(L"SurroundGain", L"0.707", 0.707f);
+  g_lfeGain = ReadIniGain(L"LFEGain", L"0.500", 0.5f);
+  g_masterGain = ReadIniGain(L"MasterGain", L"0.900", 0.9f);
 
   b[0] = 0;
   GetPrivateProfileStringW(L"Debug", L"Log", L"1", b, 64, g_iniPath);
